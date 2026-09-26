@@ -557,6 +557,7 @@ export default function SOAPRagChat({
           }}
         >
           {[
+            `Display the entire SOAP Note for ${patient.name}`,
             "What are the straight leg raise and neurological findings?",
             "Did the patient complete the 6-week physiotherapy requirement?",
             "What is the insurance plan status and coverage eligibility?",
@@ -570,11 +571,14 @@ export default function SOAPRagChat({
                 fontSize: "0.75rem",
                 padding: "4px 10px",
                 borderRadius: "100px",
+                border: i === 0 ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid var(--border)",
+                background: i === 0 ? "rgba(56, 189, 248, 0.08)" : "transparent",
+                color: i === 0 ? "var(--accent)" : "inherit",
               }}
               onClick={() => handleQuickQuery(chipText)}
               disabled={isQuerying}
             >
-              {chipText}
+              {i === 0 ? "📄 " : ""}{chipText}
             </button>
           ))}
         </div>
@@ -597,14 +601,19 @@ export default function SOAPRagChat({
           >
             {messages.map((msg) => {
               const isUser = msg.role === "user";
+              const isEntireSoap =
+                msg.citedSection === "Entire SOAP Note" ||
+                msg.content.includes("PHYSICIAN CLINICAL DOCUMENTATION");
+
               return (
                 <div
                   key={msg.id}
                   style={{
                     alignSelf: isUser ? "flex-end" : "flex-start",
-                    maxWidth: "90%",
+                    maxWidth: isEntireSoap ? "98%" : "90%",
+                    width: isEntireSoap ? "98%" : "auto",
                     background: isUser ? "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))" : "var(--bg-card)",
-                    border: `1px solid ${isUser ? "var(--border-accent)" : "var(--border)"}`,
+                    border: `1px solid ${isUser ? "var(--border-accent)" : isEntireSoap ? "rgba(56, 189, 248, 0.3)" : "var(--border)"}`,
                     borderRadius: "var(--radius-md)",
                     padding: "10px 14px",
                     fontSize: "0.88rem",
@@ -626,13 +635,13 @@ export default function SOAPRagChat({
                           fontWeight: 700,
                           padding: "2px 8px",
                           borderRadius: "100px",
-                          background: "var(--accent-soft)",
+                          background: isEntireSoap ? "rgba(56, 189, 248, 0.15)" : "var(--accent-soft)",
                           color: "var(--accent)",
                           textTransform: "uppercase",
                           letterSpacing: "0.05em",
                         }}
                       >
-                        SOAP Section: {msg.citedSection}
+                        {isEntireSoap ? "📄 Entire SOAP Clinical Note" : `SOAP Section: ${msg.citedSection}`}
                       </span>
 
                       <button
@@ -653,7 +662,23 @@ export default function SOAPRagChat({
                     </div>
                   )}
 
-                  <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+                  <div
+                    style={{
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-word",
+                      fontFamily: isEntireSoap ? "var(--font-mono, 'Consolas', monospace)" : "inherit",
+                      fontSize: isEntireSoap ? "0.78rem" : "0.88rem",
+                      lineHeight: 1.55,
+                      maxHeight: isEntireSoap ? "360px" : "none",
+                      overflowY: isEntireSoap ? "auto" : "visible",
+                      padding: isEntireSoap ? "10px 12px" : 0,
+                      background: isEntireSoap ? "rgba(10, 14, 23, 0.75)" : "transparent",
+                      borderRadius: isEntireSoap ? "8px" : 0,
+                      border: isEntireSoap ? "1px solid rgba(56, 189, 248, 0.2)" : "none",
+                    }}
+                  >
+                    {msg.content}
+                  </div>
 
                   {msg.evidence && msg.evidence.length > 0 && (
                     <div

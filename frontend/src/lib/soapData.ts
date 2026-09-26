@@ -246,3 +246,126 @@ export function detectPatientInText(text: string): "P001" | "P002" | "P003" | nu
 
   return null;
 }
+
+/**
+ * Detects whether a query asks to display or show the entire / full SOAP notes.
+ */
+export function isFullSoapQuery(query: string): boolean {
+  if (!query) return false;
+  const q = query.toLowerCase();
+
+  const hasSoap = q.includes("soap");
+  const hasDisplayIntent =
+    q.includes("display") ||
+    q.includes("show") ||
+    q.includes("entire") ||
+    q.includes("full") ||
+    q.includes("view") ||
+    q.includes("read") ||
+    q.includes("get") ||
+    q.includes("all") ||
+    q.includes("what is") ||
+    q.includes("what are") ||
+    q.includes("print") ||
+    q.includes("see") ||
+    q.includes("open") ||
+    q.includes("provide");
+
+  if (hasSoap && (hasDisplayIntent || q.trim() === "soap" || q.trim() === "soap notes" || q.trim() === "soap note")) {
+    return true;
+  }
+
+  if (
+    q.includes("clinical note") ||
+    q.includes("clinical documentation") ||
+    q.includes("entire note") ||
+    q.includes("full note") ||
+    q.includes("full record") ||
+    q.includes("entire record") ||
+    q.includes("all notes")
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Formats and returns the entire, complete physician clinical documentation (SOAP Note)
+ * for a patient with all four sections: Subjective, Objective, Assessment, and Plan.
+ */
+export function formatFullSoapNote(p: SoapPatientRecord): string {
+  return `================================================================================
+PHYSICIAN CLINICAL DOCUMENTATION (SOAP FORMAT)
+================================================================================
+Patient ID: ${p.id}
+Patient Name: ${p.name}
+DOB: ${p.dob} | Gender: ${p.gender}
+Insurance Plan: ${p.plan_name} (Status: ${p.plan_status})
+Date of Service: ${p.dos}
+Attending Provider: ${p.provider}
+Facility: ${p.clinic}
+
+--------------------------------------------------------------------------------
+[S] SUBJECTIVE
+--------------------------------------------------------------------------------
+Chief Complaint:
+${p.subjective.chief_complaint}
+
+History of Present Illness (HPI):
+${p.subjective.hpi}
+
+- Pain Duration: ${p.subjective.pain_duration_weeks} weeks
+- Pain Severity (VAS): ${p.subjective.pain_severity_vas}
+- Functional Impact: ${p.subjective.functional_impact}
+
+--------------------------------------------------------------------------------
+[O] OBJECTIVE
+--------------------------------------------------------------------------------
+Vitals:
+${p.objective.vitals}
+
+Physical Examination:
+${p.objective.physical_exam}
+
+Neurological Examination:
+${p.objective.neuro_exam}
+
+Straight Leg Raise (SLR):
+${p.objective.slr_test}
+
+Supervised Physiotherapy Trial:
+- Attempted: ${p.objective.physio_attempted ? "YES" : "NO"} (${p.objective.physio_duration_weeks} weeks completed)
+- Clinical Notes: ${p.objective.physio_notes}
+
+--------------------------------------------------------------------------------
+[A] ASSESSMENT
+--------------------------------------------------------------------------------
+Clinical Diagnoses:
+${p.assessment.diagnoses.map((d, i) => `${i + 1}. ${d}`).join("\n")}
+
+Prior Authorization Criteria Evaluation:
+- Active Health Plan Coverage: ${p.assessment.criteria_plan_active ? "YES (Active)" : "NO (Inactive / Terminated)"}
+- Documented Pain Duration ≥ 6 Weeks: ${p.assessment.criteria_pain_duration_met ? `YES (${p.subjective.pain_duration_weeks} weeks)` : `NO (${p.subjective.pain_duration_weeks} weeks)`}
+- Completed Supervised Physiotherapy Trial ≥ 6 Weeks: ${p.assessment.criteria_physio_met ? `YES (${p.objective.physio_duration_weeks} weeks completed)` : `NO (${p.objective.physio_duration_weeks} weeks completed)`}
+
+Recommendation: ${p.assessment.recommendation}
+${p.assessment.denial_reasons.length > 0 ? `Denial Reasons:\n${p.assessment.denial_reasons.map((r, i) => `${i + 1}. ${r}`).join("\n")}` : "Denial Reasons: None. All clinical necessity guidelines satisfied."}
+
+--------------------------------------------------------------------------------
+[P] PLAN
+--------------------------------------------------------------------------------
+Requested Procedure:
+${p.plan.procedure_requested} (${p.plan.cpt_code})
+
+Clinical Orders:
+${p.plan.orders.map((o, i) => `${i + 1}. ${o}`).join("\n")}
+
+Prescribed Medications:
+${p.plan.medications.map((m) => `- ${m}`).join("\n")}
+
+Follow-up Instructions:
+${p.plan.follow_up}
+================================================================================`;
+}
+

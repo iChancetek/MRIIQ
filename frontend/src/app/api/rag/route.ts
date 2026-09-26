@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { SOAP_PATIENTS, detectPatientInText, type SoapPatientRecord } from "@/lib/soapData";
+import {
+  SOAP_PATIENTS,
+  detectPatientInText,
+  formatFullSoapNote,
+  isFullSoapQuery,
+  type SoapPatientRecord,
+} from "@/lib/soapData";
 
 // Default persistent clinical memory bank per patient
 const DEFAULT_LONG_TERM_MEMORIES: Record<string, string[]> = {
@@ -35,6 +41,20 @@ function getFallbackAnswer(
   memories: string[],
 ) {
   const q = question.toLowerCase();
+
+  // Full SOAP Notes Request
+  if (isFullSoapQuery(question)) {
+    return {
+      cited_section: "Entire SOAP Note",
+      answer: formatFullSoapNote(patient),
+      evidence: [
+        `Subjective: ${patient.subjective.chief_complaint}`,
+        `Objective: ${patient.objective.physical_exam}`,
+        `Assessment: Recommendation ${patient.assessment.recommendation}`,
+        `Plan: ${patient.plan.procedure_requested}`,
+      ],
+    };
+  }
 
   // Memory inquiry
   if (q.includes("memory") || q.includes("recall") || q.includes("past") || q.includes("history") || q.includes("remember")) {
@@ -164,6 +184,27 @@ export async function POST(req: Request) {
     const initialMemories = DEFAULT_LONG_TERM_MEMORIES[patient.id] || [];
     const longTermMemories = Array.from(new Set([...initialMemories, ...customMemories]));
 
+    // When someone asks to display the SOAP Notes for a particular patient, return the entire SOAP Note
+    if (isFullSoapQuery(question)) {
+      const fullNote = formatFullSoapNote(patient);
+      return NextResponse.json({
+        patient_id: patient.id,
+        patient_name: patient.name,
+        question,
+        answer: fullNote,
+        cited_section: "Entire SOAP Note",
+        evidence: [
+          `Subjective: ${patient.subjective.chief_complaint}`,
+          `Objective: ${patient.objective.physical_exam}`,
+          `Assessment: Recommendation ${patient.assessment.recommendation}`,
+          `Plan: ${patient.plan.procedure_requested}`,
+        ],
+        recalled_long_term_memories: longTermMemories,
+        short_term_turns_count: shortTermHistory.length,
+        model_used: "clinical-soap-full-record",
+      });
+    }
+
     const clinicalContext = `
 PATIENT RECORD:
 ID: ${patient.id}
@@ -224,7 +265,8 @@ INSTRUCTIONS:
 1. Answer the question accurately and concisely using the provided SOAP documentation and Long-Term Memory.
 2. Structure your answer using the relevant section tag ([Subjective], [Objective], [Assessment], [Plan], or [Long-Term Memory]).
 3. Provide exact clinical details (durations, exam findings, test results, codes).
-4. Reference prior conversation context from short-term memory when the user's question relies on previous turns.`;
+4. Reference prior conversation context from short-term memory when the user's question relies on previous turns.
+5. If the user asks to display, view, show, or output the SOAP Notes (or full / entire SOAP note) for a patient, display the COMPLETE and ENTIRE clinical SOAP documentation with all sections ([Subjective], [Objective], [Assessment], [Plan]) verbatim and fully detailed.`;
 
         const messages: Array<{ role: string; content: string }> = [
           { role: "system", content: systemPrompt },
@@ -250,7 +292,7 @@ INSTRUCTIONS:
             model: model,
             messages: messages,
             temperature: 0.1,
-            max_completion_tokens: 350,
+            max_completion_tokens: 1500,
           }),
         });
 

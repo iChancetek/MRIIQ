@@ -69,6 +69,20 @@ def detect_patient_in_text(text: str) -> Optional[str]:
     return None
 
 
+def is_full_soap_query(query: str) -> bool:
+    """Detect whether a query asks to display or show the entire / full SOAP notes."""
+    if not query:
+        return False
+    q = query.lower()
+    has_soap = "soap" in q
+    has_display = any(k in q for k in ("display", "show", "entire", "full", "view", "read", "get", "all", "what is", "what are", "print", "see", "open", "provide"))
+    if has_soap and (has_display or q.strip() in ("soap", "soap notes", "soap note")):
+        return True
+    if any(k in q for k in ("clinical note", "clinical documentation", "entire note", "full note", "full record", "entire record", "all notes")):
+        return True
+    return False
+
+
 def load_long_term_memories(patient_id: str) -> List[str]:
     """Load persistent long-term memories for a patient."""
     pid = normalize_id(patient_id)
@@ -132,6 +146,14 @@ def deterministic_rag_fallback(
     q = question.lower()
     name = PATIENT_NAMES.get(pid, f"Patient {pid}")
     memories = long_term_memories or load_long_term_memories(pid)
+
+    # Check for full / entire SOAP notes display inquiry
+    if is_full_soap_query(question):
+        return {
+            "cited_section": "Entire SOAP Note",
+            "answer": doc_text,
+            "evidence": [f"Full Physician SOAP Documentation for {name} ({pid})"],
+        }
 
     # Check for memory inquiries
     if any(k in q for k in ("memory", "recall", "past", "history", "preference", "remember", "background")):
@@ -275,6 +297,20 @@ def query_clinical_rag(
     history = short_term_history or []
     turns_count = len(history)
 
+    # When someone asks to display the SOAP Notes for a particular patient, return the entire SOAP Note
+    if is_full_soap_query(question):
+        return RagResponse(
+            patient_id=pid,
+            patient_name=name,
+            question=question,
+            answer=doc_text,
+            cited_section="Entire SOAP Note",
+            evidence=[f"Full Physician Clinical Documentation (SOAP Format) for {name} ({pid})"],
+            recalled_long_term_memories=persistent_memories,
+            short_term_turns_count=turns_count,
+            model_used="clinical-soap-full-record",
+        )
+
     if OPENAI_API_KEY:
         try:
             client = OpenAI(api_key=OPENAI_API_KEY)
@@ -299,6 +335,7 @@ INSTRUCTIONS:
 2. Structure your answer using the relevant section tag ([Subjective], [Objective], [Assessment], [Plan], or [Long-Term Memory]).
 3. Cite exact clinical facts (e.g. durations, exams, test findings, criteria status, codes).
 4. Maintain conversational continuity by referencing previous context from short-term memory when relevant.
+5. If the user asks to display, view, show, or output the SOAP Notes (or full / entire SOAP note) for a patient, display the COMPLETE and ENTIRE clinical SOAP documentation with all sections ([Subjective], [Objective], [Assessment], [Plan]) verbatim and fully detailed.
 """
             messages = [{"role": "system", "content": system_prompt}]
 
@@ -316,7 +353,7 @@ INSTRUCTIONS:
                 model=OPENAI_MODEL,
                 messages=messages,
                 temperature=0.1,
-                max_completion_tokens=350,
+                max_completion_tokens=1500,
             )
             answer_text = response.choices[0].message.content.strip()
 

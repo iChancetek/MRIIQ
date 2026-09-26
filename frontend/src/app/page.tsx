@@ -70,33 +70,21 @@ export default function Home() {
     <>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="app-header">
-        <div className="app-logo-card" title="Magnetic Resonance Imaging (MRI)">
-          <svg
-            viewBox="0 0 36 36"
-            width="26"
-            height="26"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            style={{ display: "block" }}
+        <div className="app-logo-card" title="MRI IQ - Prior Authorization Engine">
+          <div
+            style={{
+              width: "100%",
+              height: "100%",
+              background: "linear-gradient(135deg, var(--accent) 0%, #818cf8 100%)",
+              display: "grid",
+              placeItems: "center",
+              fontSize: "1.25rem",
+              borderRadius: "8px",
+              boxShadow: "0 0 12px rgba(56, 189, 248, 0.35)",
+            }}
           >
-            {/* Outer Circular Gantry Magnet */}
-            <circle cx="18" cy="17" r="13" stroke="url(#mriGantryGrad)" strokeWidth="2.75" />
-            {/* Magnetic Resonance Wave Rings */}
-            <circle cx="18" cy="17" r="9.5" stroke="#38bdf8" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.85" />
-            {/* Central Scanning Bore */}
-            <circle cx="18" cy="17" r="6" fill="#0b1120" stroke="#818cf8" strokeWidth="1.5" />
-            {/* Patient Scanning Table / Bed */}
-            <rect x="6" y="15.5" width="24" height="3" rx="1.5" fill="#38bdf8" />
-            <rect x="12" y="14" width="8" height="1.8" rx="0.9" fill="#ffffff" opacity="0.95" />
-            {/* Scanner Base Support */}
-            <path d="M12 29h12v2a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-2z" fill="#38bdf8" opacity="0.75" />
-            <defs>
-              <linearGradient id="mriGantryGrad" x1="5" y1="4" x2="31" y2="30" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#38bdf8" />
-                <stop offset="1" stopColor="#818cf8" />
-              </linearGradient>
-            </defs>
-          </svg>
+            🩺
+          </div>
         </div>
         <div className="app-logo">
           MRI<span className="accent">IQ</span>

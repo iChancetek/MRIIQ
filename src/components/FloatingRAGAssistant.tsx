@@ -188,10 +188,6 @@ export default function FloatingRAGAssistant({
     }
   }, [messages, isOpen]);
 
-  const handlePatientSwitch = (id: string) => {
-    setActivePatientId(id);
-    onSelectPatient?.(id);
-  };
 
   /* ── Drag & Drop Handlers for Floating Assistant Window ────────────── */
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -388,7 +384,7 @@ export default function FloatingRAGAssistant({
         id: `asst-${Date.now()}`,
         role: "assistant",
         content:
-          "Please select a patient (Alex Morgan P001, Jordan Lee P002, or Casey Kim P003) or mention the patient's name/ID in your query to retrieve clinical documentation.",
+          "Please enter a patient ID in the case form or mention the patient's name (e.g., Alex Morgan, Jordan Lee, Casey Kim) in your query to retrieve clinical documentation.",
         citedSection: "Notice",
       };
       setMessages((prev) => [...prev, guidanceMsg]);
@@ -493,19 +489,6 @@ export default function FloatingRAGAssistant({
         <span style={{ fontSize: "1.1rem", opacity: 0.85 }}>⠿</span>
         <span style={{ fontSize: "1.2rem" }}>🩺</span>
         <span>Clinical RAG</span>
-        {activePatientId && (
-          <span
-            style={{
-              padding: "2px 8px",
-              borderRadius: "100px",
-              background: "rgba(255, 255, 255, 0.22)",
-              fontSize: "0.75rem",
-              fontWeight: 800,
-            }}
-          >
-            {activePatientId}
-          </span>
-        )}
         <span
           style={{
             width: "9px",
@@ -680,73 +663,44 @@ export default function FloatingRAGAssistant({
             </div>
           </div>
 
-          {/* ── PATIENT SELECTOR STRIP ───────────────────────────────── */}
-          <div
-            style={{
-              padding: "7px 14px",
-              background: "rgba(15, 23, 42, 0.85)",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "8px",
-              fontSize: "0.76rem",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-              <span style={{ color: "var(--text-muted)", fontWeight: 600 }}>Patient:</span>
-              {(["P001", "P002", "P003"] as const).map((pid) => {
-                const isSelected = activePatientId === pid;
-                const p = SOAP_PATIENTS[pid];
-                return (
-                  <button
-                    key={pid}
-                    type="button"
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: "6px",
-                      border: isSelected ? "1px solid var(--accent)" : "1px solid rgba(255, 255, 255, 0.1)",
-                      background: isSelected ? "rgba(56, 189, 248, 0.15)" : "transparent",
-                      color: isSelected ? "var(--accent)" : "var(--text-secondary)",
-                      fontSize: "0.74rem",
-                      fontWeight: isSelected ? 700 : 500,
-                      cursor: "pointer",
-                    }}
-                    onClick={() => handlePatientSwitch(pid)}
-                    title={`Switch to ${p.name}`}
-                  >
-                    {pid}
-                  </button>
-                );
-              })}
-            </div>
-
-            {patient ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* ── ACTIVE CLINICAL CONTEXT ──────────────────────────────── */}
+          {patient && (
+            <div
+              style={{
+                padding: "6px 14px",
+                background: "rgba(15, 23, 42, 0.85)",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+                fontSize: "0.76rem",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                <span>👤</span>
                 <span style={{ color: "#f8fafc", fontWeight: 600 }}>{patient.name}</span>
-                <a
-                  href={`/mock-pdfs/${patient.id}.pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{
-                    color: "var(--accent)",
-                    textDecoration: "none",
-                    fontSize: "0.72rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "2px",
-                  }}
-                  title={`Open original clinical note PDF for ${patient.name}`}
-                >
-                  📄 PDF ↗
-                </a>
+                <span style={{ color: "var(--text-muted)" }}>•</span>
+                <span style={{ color: "var(--text-secondary)" }}>{patient.plan_name}</span>
               </div>
-            ) : (
-              <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>
-                No patient selected
-              </span>
-            )}
-          </div>
+              <a
+                href={`/mock-pdfs/${patient.id}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  color: "var(--accent)",
+                  textDecoration: "none",
+                  fontSize: "0.72rem",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "2px",
+                }}
+                title={`Open original clinical note PDF for ${patient.name}`}
+              >
+                📄 PDF ↗
+              </a>
+            </div>
+          )}
 
           {/* ── TRADITIONAL RAG CONVERSATION AREA ─────────────────────── */}
           <div
@@ -797,6 +751,9 @@ export default function FloatingRAGAssistant({
                 {/* Traditional RAG Prompt Suggestion Chips */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {[
+                    patient
+                      ? `Display the entire SOAP Note for ${patient.name}`
+                      : "Display the entire SOAP Note",
                     "What are the straight leg raise findings?",
                     "Did patient complete 6-week physiotherapy?",
                     "What is insurance coverage status?",
@@ -810,8 +767,8 @@ export default function FloatingRAGAssistant({
                         textAlign: "left",
                         fontSize: "0.78rem",
                         color: "var(--text-primary)",
-                        background: "rgba(255, 255, 255, 0.04)",
-                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        background: idx === 0 ? "rgba(56, 189, 248, 0.08)" : "rgba(255, 255, 255, 0.04)",
+                        border: idx === 0 ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
                         borderRadius: "8px",
                         cursor: "pointer",
                         display: "flex",
@@ -825,7 +782,7 @@ export default function FloatingRAGAssistant({
                       }}
                       disabled={isQuerying}
                     >
-                      <span style={{ color: "var(--accent)" }}>🔍</span>
+                      <span style={{ color: "var(--accent)" }}>{idx === 0 ? "📄" : "🔍"}</span>
                       <span>{chip}</span>
                     </button>
                   ))}
@@ -834,12 +791,17 @@ export default function FloatingRAGAssistant({
             ) : (
               messages.map((m) => {
                 const isUser = m.role === "user";
+                const isEntireSoap =
+                  m.citedSection === "Entire SOAP Note" ||
+                  m.content.includes("PHYSICIAN CLINICAL DOCUMENTATION");
+
                 return (
                   <div
                     key={m.id}
                     style={{
                       alignSelf: isUser ? "flex-end" : "flex-start",
-                      maxWidth: "90%",
+                      maxWidth: isEntireSoap ? "96%" : "90%",
+                      width: isEntireSoap ? "96%" : "auto",
                       display: "flex",
                       flexDirection: "column",
                       gap: "6px",
@@ -856,7 +818,7 @@ export default function FloatingRAGAssistant({
                         color: "#ffffff",
                         fontSize: "0.83rem",
                         lineHeight: 1.5,
-                        border: isUser ? "none" : "1px solid rgba(255, 255, 255, 0.09)",
+                        border: isUser ? "none" : isEntireSoap ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(255, 255, 255, 0.09)",
                         boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)",
                       }}
                     >
@@ -876,12 +838,15 @@ export default function FloatingRAGAssistant({
                             style={{
                               fontSize: "0.68rem",
                               fontWeight: 700,
-                              color: "var(--accent)",
+                              color: isEntireSoap ? "var(--accent)" : "var(--accent)",
                               textTransform: "uppercase",
                               letterSpacing: "0.04em",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
                             }}
                           >
-                            Clinical RAG Response
+                            {isEntireSoap ? "📄 Entire SOAP Clinical Note" : "Clinical RAG Response"}
                           </span>
                           <button
                             type="button"
@@ -901,7 +866,25 @@ export default function FloatingRAGAssistant({
                         </div>
                       )}
 
-                      <div style={{ whiteSpace: "pre-line" }}>{m.content}</div>
+                      <div
+                        style={{
+                          whiteSpace: "pre-wrap",
+                          wordBreak: "break-word",
+                          fontFamily: isEntireSoap
+                            ? "var(--font-mono, 'Consolas', monospace)"
+                            : "inherit",
+                          fontSize: isEntireSoap ? "0.76rem" : "0.83rem",
+                          lineHeight: 1.55,
+                          maxHeight: isEntireSoap ? "380px" : "none",
+                          overflowY: isEntireSoap ? "auto" : "visible",
+                          padding: isEntireSoap ? "10px 12px" : 0,
+                          background: isEntireSoap ? "rgba(10, 14, 23, 0.75)" : "transparent",
+                          borderRadius: isEntireSoap ? "8px" : 0,
+                          border: isEntireSoap ? "1px solid rgba(56, 189, 248, 0.2)" : "none",
+                        }}
+                      >
+                        {m.content}
+                      </div>
 
                       {/* Traditional RAG Citation / Grounded Evidence Snippet */}
                       {!isUser && (m.evidence?.length || m.citedSection) && (
