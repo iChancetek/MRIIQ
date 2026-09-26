@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { SOAP_PATIENTS, type SoapPatientRecord } from "@/lib/soapData";
 import { querySoapRag, type RagResponse } from "@/lib/api";
 import { speakText, stopSpeech } from "@/lib/speech";
@@ -20,6 +20,27 @@ interface ChatMessage {
   evidence?: string[];
 }
 
+function getPatientSoapBriefing(p: SoapPatientRecord): string {
+  return `📋 **Physician Clinical Documentation (SOAP Notes) — ${p.name} (${p.id}):**\n\n` +
+    `• **[S] Subjective**: ${p.subjective.chief_complaint}\n` +
+    `  - *HPI*: ${p.subjective.hpi}\n` +
+    `  - *Pain Duration*: ${p.subjective.pain_duration_weeks} weeks (VAS ${p.subjective.pain_severity_vas})\n` +
+    `  - *Functional Limitations*: ${p.subjective.functional_impact}\n\n` +
+    `• **[O] Objective**: ${p.objective.vitals}\n` +
+    `  - *Physical Exam*: ${p.objective.physical_exam}\n` +
+    `  - *Neurological*: ${p.objective.neuro_exam}\n` +
+    `  - *Straight Leg Raise (SLR)*: ${p.objective.slr_test}\n` +
+    `  - *Supervised Physiotherapy*: ${p.objective.physio_duration_weeks} weeks completed (${p.objective.physio_attempted ? "YES" : "NO"}). ${p.objective.physio_notes}\n\n` +
+    `• **[A] Assessment**: ${p.assessment.diagnoses.join("; ")}\n` +
+    `  - *Medical Criteria*: Plan Active: ${p.assessment.criteria_plan_active ? "✅" : "❌"} | Pain ≥6w: ${p.assessment.criteria_pain_duration_met ? "✅" : "❌"} | Physio ≥6w: ${p.assessment.criteria_physio_met ? "✅" : "❌"}\n` +
+    `  - *Determination*: **${p.assessment.recommendation}**${p.assessment.denial_reasons.length > 0 ? " — Denial Reasons: " + p.assessment.denial_reasons.join(". ") : " (All prior authorization criteria satisfied)"}\n\n` +
+    `• **[P] Plan**: Procedure requested: ${p.plan.procedure_requested} (${p.plan.cpt_code})\n` +
+    `  - *Orders*: ${p.plan.orders.join("; ")}\n` +
+    `  - *Medications*: ${p.plan.medications.join("; ")}\n` +
+    `  - *Follow-up*: ${p.plan.follow_up}\n\n` +
+    `💡 *Clinical RAG Q&A Assistant ready. Ask any question below to inspect or cross-examine documentation.*`;
+}
+
 export default function SOAPRagChat({
   selectedPatientId = "P001",
   onSelectPatient,
@@ -30,30 +51,36 @@ export default function SOAPRagChat({
   const [isQuerying, setIsQuerying] = useState(false);
   const [isPlayingId, setIsPlayingId] = useState<string | null>(null);
 
-  // Initial chat history with welcome guide
+  const patient: SoapPatientRecord =
+    SOAP_PATIENTS[activePatientId] || SOAP_PATIENTS["P001"];
+
+  // Initialize with immediate full clinical documentation briefing!
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
-      id: "welcome",
+      id: "initial-briefing",
       role: "assistant",
-      content:
-        "Welcome to the Clinical RAG Assistant. Ask any question regarding the patient's Physician Clinical Documentation in SOAP format.",
+      content: getPatientSoapBriefing(SOAP_PATIENTS[selectedPatientId] || SOAP_PATIENTS["P001"]),
       citedSection: "SOAP Record",
     },
   ]);
 
-  const patient: SoapPatientRecord =
-    SOAP_PATIENTS[activePatientId] || SOAP_PATIENTS["P001"];
+  // Sync prop changes
+  useEffect(() => {
+    if (selectedPatientId && selectedPatientId !== activePatientId) {
+      handlePatientChange(selectedPatientId);
+    }
+  }, [selectedPatientId]);
 
   const handlePatientChange = (id: string) => {
     setActivePatientId(id);
     onSelectPatient?.(id);
-    // Add context note in chat
+    const targetPatient = SOAP_PATIENTS[id] || SOAP_PATIENTS["P001"];
     setMessages((prev) => [
       ...prev,
       {
         id: `switch-${Date.now()}`,
         role: "assistant",
-        content: `Switched context to ${SOAP_PATIENTS[id]?.name || id} (${id}). SOAP clinical documentation loaded.`,
+        content: getPatientSoapBriefing(targetPatient),
         citedSection: "SOAP Record",
       },
     ]);
@@ -151,7 +178,7 @@ export default function SOAPRagChat({
               style={{ fontSize: "0.8rem", padding: "6px 12px" }}
               id="btn-view-soap-pdf"
             >
-              📄 View SOAP Note PDF ({patient.id})
+              📄 View Official SOAP Note PDF ({patient.id}) ↗
             </a>
           </div>
         </div>
@@ -493,7 +520,7 @@ export default function SOAPRagChat({
         {/* Chat Messages */}
         <div
           style={{
-            maxHeight: "320px",
+            maxHeight: "360px",
             overflowY: "auto",
             display: "flex",
             flexDirection: "column",
@@ -512,7 +539,7 @@ export default function SOAPRagChat({
                 key={msg.id}
                 style={{
                   alignSelf: isUser ? "flex-end" : "flex-start",
-                  maxWidth: "85%",
+                  maxWidth: "90%",
                   background: isUser ? "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))" : "var(--bg-card)",
                   border: `1px solid ${isUser ? "var(--border-accent)" : "var(--border)"}`,
                   borderRadius: "var(--radius-md)",
