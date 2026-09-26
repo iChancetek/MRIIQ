@@ -113,13 +113,46 @@ def text_to_speech(recommendation: str, denial_reasons: list[str] = None):
     return Response(content=audio_bytes, media_type="audio/mpeg")
 
 
+from backend.app.models.extraction import (
+    AuthRequest, ReviewRequest, AuthResponse, FinalOutcomeResponse,
+    RagRequest, RagResponse, MemoryUpdateRequest, MemoryListResponse,
+)
+from backend.app.agents.rag import (
+    query_clinical_rag, load_long_term_memories, add_patient_memory
+)
+
+
 @app.post("/api/rag", response_model=RagResponse)
 def rag_endpoint(req: RagRequest):
     """
-    RAG endpoint querying SOAP clinical documentation in Python.
-    Grounded in synthetic EHR records for P001, P002, and P003.
+    RAG endpoint querying SOAP clinical documentation with Dual Memory in Python.
+    - Short-Term Memory: conversation history within the current session.
+    - Long-Term Memory: persistent patient clinical memory bank.
     """
-    return query_clinical_rag(req.patient_id, req.question)
+    return query_clinical_rag(
+        patient_id=req.patient_id,
+        question=req.question,
+        short_term_history=req.short_term_history,
+        custom_memories=req.custom_memories,
+    )
+
+
+@app.get("/api/rag/memories", response_model=MemoryListResponse)
+def get_memories_endpoint(patient_id: str = "P001"):
+    """
+    Retrieve persistent long-term memories for a patient.
+    """
+    memories = load_long_term_memories(patient_id)
+    return MemoryListResponse(patient_id=patient_id, memories=memories)
+
+
+@app.post("/api/rag/memories", response_model=MemoryListResponse)
+def add_memory_endpoint(req: MemoryUpdateRequest):
+    """
+    Add a new persistent long-term memory for a patient.
+    """
+    updated = add_patient_memory(req.patient_id, req.memory)
+    return MemoryListResponse(patient_id=req.patient_id, memories=updated)
 
 
 if __name__ == "__main__":

@@ -1,22 +1,46 @@
 """
-RAG Agent — Grounded Clinical Documentation Assistant in Python.
+RAG Agent with Short-Term and Long-Term Memory in Python.
+- Short-Term Memory: Ephemeral conversation history across turns within the current session.
+- Long-Term Memory: Persistent patient clinical history, prior audit decisions, and clinician preferences.
 Queries synthetic physician documentation in SOAP format for P001, P002, P003.
 Uses OpenAI gpt-5.6-terra with deterministic semantic retrieval fallback.
 """
 import os
+import json
 import re
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from backend.app.config import OPENAI_API_KEY, OPENAI_MODEL
 from backend.app.models.extraction import RagResponse
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+_MEMORY_FILE = _DATA_DIR / "patient_memories.json"
 
 PATIENT_NAMES = {
     "P001": "Alex Morgan",
     "P002": "Jordan Lee",
     "P003": "Casey Kim",
+}
+
+# Default initial Long-Term Memories per patient
+DEFAULT_LONG_TERM_MEMORIES: Dict[str, List[str]] = {
+    "P001": [
+        "Patient preference: Prioritizes conservative therapies and non-invasive interventions before spine surgery.",
+        "Historical Imaging: Prior lumbar X-ray in 2024 revealed mild disc space narrowing at L5-S1.",
+        "Physiotherapy Compliance: Attended all 16 scheduled sessions (8 weeks) at Apex Physical Therapy without gaps.",
+        "Verified active coverage under Horizon Blue Cross PPO with zero prior authorization denials on file.",
+    ],
+    "P002": [
+        "Patient history: Axial back pain exacerbated by heavy lifting during residential construction projects.",
+        "Clinical Preference: Self-managed with OTC Ibuprofen 400mg; previously declined formal physiotherapy referral.",
+        "Care Plan Alert: Patient requires formal counseling on payer-mandated 6-week conservative physiotherapy before MRI approval.",
+    ],
+    "P003": [
+        "Eligibility Note: Employer change resulted in policy lapse; UnitedHealthcare coverage terminated on 08/31/2026.",
+        "Financial Counseling: Patient referred to clinic benefits coordinator for health insurance exchange enrollment.",
+        "Clinical Plan: Physician recommends initiating structured physical therapy immediately once coverage is reinstated.",
+    ],
 }
 
 
@@ -31,6 +55,46 @@ def normalize_id(patient_id: str) -> str:
     return clean
 
 
+def load_long_term_memories(patient_id: str) -> List[str]:
+    """Load persistent long-term memories for a patient."""
+    pid = normalize_id(patient_id)
+    if _MEMORY_FILE.exists():
+        try:
+            data = json.loads(_MEMORY_FILE.read_text(encoding="utf-8"))
+            if pid in data and isinstance(data[pid], list):
+                return data[pid]
+        except Exception:
+            pass
+    return DEFAULT_LONG_TERM_MEMORIES.get(pid, [])
+
+
+def save_long_term_memories(patient_id: str, memories: List[str]) -> None:
+    """Save persistent long-term memories to disk."""
+    pid = normalize_id(patient_id)
+    all_data = {}
+    if _MEMORY_FILE.exists():
+        try:
+            all_data = json.loads(_MEMORY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            all_data = {}
+    all_data[pid] = memories
+    try:
+        _MEMORY_FILE.write_text(json.dumps(all_data, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def add_patient_memory(patient_id: str, new_memory: str) -> List[str]:
+    """Append a new clinical memory to the patient's long-term store."""
+    pid = normalize_id(patient_id)
+    current = load_long_term_memories(pid)
+    cleaned = new_memory.strip()
+    if cleaned and cleaned not in current:
+        current.append(cleaned)
+        save_long_term_memories(pid, current)
+    return current
+
+
 def load_soap_doc(patient_id: str) -> str:
     """Load the full SOAP notes text file for the patient."""
     pid = normalize_id(patient_id)
@@ -40,13 +104,29 @@ def load_soap_doc(patient_id: str) -> str:
     return f"SOAP documentation not found for {pid}."
 
 
-def deterministic_rag_fallback(pid: str, doc_text: str, question: str) -> Dict[str, Any]:
+def deterministic_rag_fallback(
+    pid: str,
+    doc_text: str,
+    question: str,
+    short_term_history: Optional[List[Dict[str, str]]] = None,
+    long_term_memories: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """
-    Deterministic clinical keyword search across SOAP sections:
-    [Subjective], [Objective], [Assessment], [Plan]
+    Deterministic clinical keyword search across SOAP sections,
+    taking into account short-term dialogue context and recalled long-term memories.
     """
     q = question.lower()
     name = PATIENT_NAMES.get(pid, f"Patient {pid}")
+    memories = long_term_memories or load_long_term_memories(pid)
+
+    # Check for memory inquiries
+    if any(k in q for k in ("memory", "recall", "past", "history", "preference", "remember", "background")):
+        return {
+            "cited_section": "Long-Term Memory",
+            "answer": f"Recalled {len(memories)} persistent clinical memory items for {name} ({pid}):\n" +
+                      "\n".join(f"• {m}" for m in memories),
+            "evidence": memories,
+        }
 
     # Straight leg raise / SLR / neuro exam
     if any(k in q for k in ("slr", "straight leg", "raise", "neuro", "dermatome", "reflex")):
@@ -134,44 +214,79 @@ def deterministic_rag_fallback(pid: str, doc_text: str, question: str) -> Dict[s
 
     # General overview
     return {
-        cited: "SOAP Record",
+        "cited_section": "SOAP Record",
         "answer": f"{name} ({pid}) Physician Documentation: Formatted according to clinical SOAP guidelines. Details include Subjective HPI, Objective physical/neurological findings, Assessment criteria checklist, and Plan orders.",
         "evidence": [f"Patient: {name}", f"ID: {pid}"],
     }
 
 
-def query_clinical_rag(patient_id: str, question: str) -> RagResponse:
+def query_clinical_rag(
+    patient_id: str,
+    question: str,
+    short_term_history: Optional[List[Dict[str, str]]] = None,
+    custom_memories: Optional[List[str]] = None,
+) -> RagResponse:
     """
-    Main entry point for Python Clinical RAG Agent.
-    Retrieves SOAP document, queries gpt-5.6-terra with strict grounding,
-    or uses deterministic clinical semantic retrieval.
+    Main entry point for Python Clinical RAG Agent with Dual Memory:
+    1. Short-Term Memory: Ephemeral conversation history across user/assistant turns.
+    2. Long-Term Memory: Recalled persistent patient profile and clinical annotations.
     """
     pid = normalize_id(patient_id)
     name = PATIENT_NAMES.get(pid, f"Patient {pid}")
     doc_text = load_soap_doc(pid)
+    
+    # Retrieve persistent long-term memories
+    persistent_memories = load_long_term_memories(pid)
+    if custom_memories:
+        for m in custom_memories:
+            if m and m not in persistent_memories:
+                persistent_memories.append(m)
+
+    history = short_term_history or []
+    turns_count = len(history)
 
     if OPENAI_API_KEY:
         try:
             client = OpenAI(api_key=OPENAI_API_KEY)
+            
+            memory_block = "\n".join(f"- {m}" for m in persistent_memories) if persistent_memories else "None on record."
+
             system_prompt = f"""You are an expert clinical documentation and prior authorization auditor answering questions about patient {name} ({pid}).
-You must answer questions strictly based on the following Physician Clinical Documentation in SOAP Notes format.
+
+You have access to:
+1. Grounded Physician Clinical Documentation in SOAP Notes format.
+2. Long-Term Patient Memory Bank (historical audit records, preferences, clinical alerts).
+3. Short-Term Conversational Memory (previous turns in this active consultation session).
 
 SOAP CLINICAL DOCUMENTATION:
 {doc_text}
 
+LONG-TERM PATIENT MEMORY:
+{memory_block}
+
 INSTRUCTIONS:
-1. Answer accurately and concisely based ONLY on the clinical documentation.
-2. Tag your answer with the relevant SOAP section ([Subjective], [Objective], [Assessment], or [Plan]).
-3. Cite exact figures (weeks, exam findings, ICD-10 codes, CPT codes).
+1. Answer accurately and concisely, citing evidence from the SOAP note or Long-Term Memory.
+2. Structure your answer using the relevant section tag ([Subjective], [Objective], [Assessment], [Plan], or [Long-Term Memory]).
+3. Cite exact clinical facts (e.g. durations, exams, test findings, criteria status, codes).
+4. Maintain conversational continuity by referencing previous context from short-term memory when relevant.
 """
+            messages = [{"role": "system", "content": system_prompt}]
+
+            # Add short-term conversational memory turns (limited to last 8 turns)
+            for turn in history[-8:]:
+                role = turn.get("role", "user")
+                content = turn.get("content", "")
+                if role in ("user", "assistant") and content:
+                    messages.append({"role": role, "content": content})
+
+            # Add current user question
+            messages.append({"role": "user", "content": question})
+
             response = client.chat.completions.create(
                 model=OPENAI_MODEL,
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": question},
-                ],
+                messages=messages,
                 temperature=0.1,
-                max_completion_tokens=300,
+                max_completion_tokens=350,
             )
             answer_text = response.choices[0].message.content.strip()
 
@@ -184,6 +299,8 @@ INSTRUCTIONS:
                 cited = "Assessment"
             elif "[Plan]" in answer_text or any(k in question.lower() for k in ("plan", "cpt", "order", "medication", "procedure")):
                 cited = "Plan"
+            elif "[Long-Term Memory]" in answer_text or any(k in question.lower() for k in ("memory", "recall", "past")):
+                cited = "Long-Term Memory"
 
             return RagResponse(
                 patient_id=pid,
@@ -191,15 +308,16 @@ INSTRUCTIONS:
                 question=question,
                 answer=answer_text,
                 cited_section=cited,
-                evidence=[],
+                evidence=persistent_memories[:3],
+                recalled_long_term_memories=persistent_memories,
+                short_term_turns_count=turns_count,
                 model_used=OPENAI_MODEL,
             )
         except Exception:
-            # Fall through to deterministic fallback
             pass
 
-    # Deterministic fallback
-    fallback = deterministic_rag_fallback(pid, doc_text, question)
+    # Deterministic fallback with memory integration
+    fallback = deterministic_rag_fallback(pid, doc_text, question, history, persistent_memories)
     return RagResponse(
         patient_id=pid,
         patient_name=name,
@@ -207,5 +325,7 @@ INSTRUCTIONS:
         answer=fallback["answer"],
         cited_section=fallback.get("cited_section", "SOAP Record"),
         evidence=fallback.get("evidence", []),
+        recalled_long_term_memories=persistent_memories,
+        short_term_turns_count=turns_count,
         model_used="clinical-rag-python-engine",
     )

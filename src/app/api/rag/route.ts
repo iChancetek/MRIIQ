@@ -1,17 +1,50 @@
 import { NextResponse } from "next/server";
 import { SOAP_PATIENTS, type SoapPatientRecord } from "@/lib/soapData";
 
+// Default persistent clinical memory bank per patient
+const DEFAULT_LONG_TERM_MEMORIES: Record<string, string[]> = {
+  P001: [
+    "Patient preference: Prioritizes conservative therapies and non-invasive interventions before spine surgery.",
+    "Historical Imaging: Prior lumbar X-ray in 2024 revealed mild disc space narrowing at L5-S1.",
+    "Physiotherapy Compliance: Attended all 16 scheduled sessions (8 weeks) at Apex Physical Therapy without gaps.",
+    "Verified active coverage under Horizon Blue Cross PPO with zero prior authorization denials on file.",
+  ],
+  P002: [
+    "Patient history: Axial back pain exacerbated by heavy lifting during residential construction projects.",
+    "Clinical Preference: Self-managed with OTC Ibuprofen 400mg; previously declined formal physiotherapy referral.",
+    "Care Plan Alert: Patient requires formal counseling on payer-mandated 6-week conservative physiotherapy before MRI approval.",
+  ],
+  P003: [
+    "Eligibility Note: Employer change resulted in policy lapse; UnitedHealthcare coverage terminated on 08/31/2026.",
+    "Financial Counseling: Patient referred to clinic benefits coordinator for health insurance exchange enrollment.",
+    "Clinical Plan: Physician recommends initiating structured physical therapy immediately once coverage is reinstated.",
+  ],
+};
+
 function normalizePatientId(id: string): string {
   const clean = (id || "P001").trim().toUpperCase();
-  // Handle typo POO1 -> P001
   if (clean === "POO1" || clean === "P01") return "P001";
   if (clean === "POO2" || clean === "P02") return "P002";
   if (clean === "POO3" || clean === "P03") return "P003";
   return clean;
 }
 
-function getFallbackAnswer(patient: SoapPatientRecord, question: string) {
+function getFallbackAnswer(
+  patient: SoapPatientRecord,
+  question: string,
+  memories: string[],
+) {
   const q = question.toLowerCase();
+
+  // Memory inquiry
+  if (q.includes("memory") || q.includes("recall") || q.includes("past") || q.includes("history") || q.includes("remember")) {
+    return {
+      cited_section: "Long-Term Memory",
+      answer: `Recalled persistent clinical memories for ${patient.name} (${patient.id}):\n` +
+        memories.map((m) => `• ${m}`).join("\n"),
+      evidence: memories,
+    };
+  }
 
   // Straight leg raise / SLR
   if (q.includes("slr") || q.includes("straight leg") || q.includes("raise")) {
@@ -86,12 +119,18 @@ export async function POST(req: Request) {
     const rawPatientId = body.patient_id || "P001";
     const patientId = normalizePatientId(rawPatientId);
     const question = (body.question || "").trim();
+    const shortTermHistory = Array.isArray(body.short_term_history) ? body.short_term_history : [];
+    const customMemories = Array.isArray(body.custom_memories) ? body.custom_memories : [];
 
     if (!question) {
       return NextResponse.json({ error: "Question is required" }, { status: 400 });
     }
 
     const patient = SOAP_PATIENTS[patientId] || SOAP_PATIENTS["P001"];
+
+    // Combine default long-term memories with custom client memories
+    const initialMemories = DEFAULT_LONG_TERM_MEMORIES[patient.id] || [];
+    const longTermMemories = Array.from(new Set([...initialMemories, ...customMemories]));
 
     const clinicalContext = `
 PATIENT RECORD:
@@ -129,27 +168,45 @@ ${patient.assessment.denial_reasons.length > 0 ? `- Denial Reasons: ${patient.as
 - Clinical Orders: ${patient.plan.orders.join("; ")}
 - Prescribed Medications: ${patient.plan.medications.join("; ")}
 - Follow-up: ${patient.plan.follow_up}
+
+[LONG-TERM PATIENT MEMORY BANK]:
+${longTermMemories.map((m) => `- ${m}`).join("\n")}
 `;
 
     const apiKey = process.env.OPENAI_API_KEY;
 
-    // If OpenAI is available, query gpt-5.6-terra with strict clinical grounding
     if (apiKey) {
       try {
         const model = process.env.OPENAI_MODEL || "gpt-5.6-terra";
-        const prompt = `You are an expert clinical documentation and prior authorization auditor answering questions about a patient's Physician Clinical Documentation in SOAP Notes format.
+        const systemPrompt = `You are an expert clinical documentation and prior authorization auditor answering questions about a patient's Physician Clinical Documentation in SOAP Notes format.
 
-CLINICAL DOCUMENTATION (SOAP RECORD):
+You have access to:
+1. Grounded Physician Clinical Documentation in SOAP Notes format.
+2. Long-Term Patient Memory Bank (historical audit records, preferences, clinical alerts).
+3. Short-Term Conversational Memory (previous turns in this active consultation session).
+
+CLINICAL DOCUMENTATION & MEMORY BANK:
 ${clinicalContext}
 
-USER QUESTION:
-${question}
-
 INSTRUCTIONS:
-1. Answer the question accurately and concisely using ONLY the provided SOAP documentation above.
-2. Structure your answer using the relevant SOAP section tag ([Subjective], [Objective], [Assessment], or [Plan]).
-3. Provide the exact clinical details (e.g. durations, exams, test findings, criteria status, codes).
-4. Do not invent or assume any clinical information not found in the note.`;
+1. Answer the question accurately and concisely using the provided SOAP documentation and Long-Term Memory.
+2. Structure your answer using the relevant section tag ([Subjective], [Objective], [Assessment], [Plan], or [Long-Term Memory]).
+3. Provide exact clinical details (durations, exam findings, test results, codes).
+4. Reference prior conversation context from short-term memory when the user's question relies on previous turns.`;
+
+        const messages: Array<{ role: string; content: string }> = [
+          { role: "system", content: systemPrompt },
+        ];
+
+        // Add short-term conversational turns (last 6 turns)
+        for (const turn of shortTermHistory.slice(-6)) {
+          if (turn && turn.role && turn.content) {
+            messages.push({ role: turn.role, content: turn.content });
+          }
+        }
+
+        // Add current question
+        messages.push({ role: "user", content: question });
 
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
@@ -159,15 +216,9 @@ INSTRUCTIONS:
           },
           body: JSON.stringify({
             model: model,
-            messages: [
-              {
-                role: "system",
-                content:
-                  "You are a clinical physician assistant for MRI Prior Authorization auditing.",
-              },
-              { role: "user", content: prompt },
-            ],
+            messages: messages,
             temperature: 0.1,
+            max_completion_tokens: 350,
           }),
         });
 
@@ -175,12 +226,12 @@ INSTRUCTIONS:
           const completion = await response.json();
           const answerText = completion.choices?.[0]?.message?.content || "";
 
-          // Determine cited section
           let cited = "SOAP Record";
           if (answerText.includes("[Subjective]") || /subjective/i.test(question)) cited = "Subjective";
           else if (answerText.includes("[Objective]") || /objective|exam|slr|physical|vital|physio/i.test(question)) cited = "Objective";
           else if (answerText.includes("[Assessment]") || /assessment|diagnos|criteri|deni|approv/i.test(question)) cited = "Assessment";
           else if (answerText.includes("[Plan]") || /plan|cpt|procedure|order|rx|medication/i.test(question)) cited = "Plan";
+          else if (answerText.includes("[Long-Term Memory]") || /memory|recall|past/i.test(question)) cited = "Long-Term Memory";
 
           return NextResponse.json({
             patient_id: patient.id,
@@ -188,16 +239,19 @@ INSTRUCTIONS:
             question,
             answer: answerText,
             cited_section: cited,
+            evidence: longTermMemories.slice(0, 3),
+            recalled_long_term_memories: longTermMemories,
+            short_term_turns_count: shortTermHistory.length,
             model_used: model,
           });
         }
       } catch {
-        // Fall back gracefully to structured SOAP retrieval
+        // Fall back gracefully
       }
     }
 
     // Deterministic clinical retrieval fallback
-    const fallback = getFallbackAnswer(patient, question);
+    const fallback = getFallbackAnswer(patient, question, longTermMemories);
     return NextResponse.json({
       patient_id: patient.id,
       patient_name: patient.name,
@@ -205,6 +259,8 @@ INSTRUCTIONS:
       answer: fallback.answer,
       cited_section: fallback.cited_section,
       evidence: fallback.evidence,
+      recalled_long_term_memories: longTermMemories,
+      short_term_turns_count: shortTermHistory.length,
       model_used: "clinical-rag-engine",
     });
   } catch (err: unknown) {

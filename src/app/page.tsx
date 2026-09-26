@@ -9,6 +9,7 @@ import MockPdfViewer from "@/components/MockPdfViewer";
 import TTSPlayer from "@/components/TTSPlayer";
 import FinalOutcome from "@/components/FinalOutcome";
 import SOAPRagChat from "@/components/SOAPRagChat";
+import FloatingRAGAssistant from "@/components/FloatingRAGAssistant";
 import { authorize, submitReview, type AuthResponse } from "@/lib/api";
 
 type Phase = "input" | "loading" | "review" | "submitting" | "outcome";
@@ -247,6 +248,21 @@ export default function Home() {
           SYNTHETIC DATA — NOT A REAL PATIENT
         </div>
       </main>
+
+      {/* ── Docked Bottom-Right Clinical RAG Assistant with Dual Memory ── */}
+      <FloatingRAGAssistant
+        selectedPatientId={patientId}
+        onSelectPatient={(id) => {
+          setPatientId(id);
+          if (id === "P001") {
+            setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
+          } else if (id === "P002") {
+            setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
+          } else if (id === "P003") {
+            setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
+          }
+        }}
+      />
     </>
   );
 }

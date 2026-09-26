@@ -1,7 +1,7 @@
 """
 Pydantic models used across the application.
 """
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 
 
@@ -44,14 +44,30 @@ class RagRequest(BaseModel):
     """Frontend → Backend: query physician clinical documentation via RAG."""
     patient_id: str
     question: str
+    short_term_history: Optional[List[Dict[str, str]]] = None
+    custom_memories: Optional[List[str]] = None
 
 
 class RagResponse(BaseModel):
-    """Backend → Frontend: RAG answer grounded in SOAP notes."""
+    """Backend → Frontend: RAG answer grounded in SOAP notes with dual memory."""
     patient_id: str
     patient_name: str
     question: str
     answer: str
     cited_section: str
     evidence: List[str] = []
+    recalled_long_term_memories: List[str] = []
+    short_term_turns_count: int = 0
     model_used: str = "gpt-5.6-terra"
+
+
+class MemoryUpdateRequest(BaseModel):
+    """Frontend → Backend: add a memory to patient's long-term store."""
+    patient_id: str
+    memory: str
+
+
+class MemoryListResponse(BaseModel):
+    """Backend → Frontend: retrieve long-term memories for a patient."""
+    patient_id: str
+    memories: List[str]

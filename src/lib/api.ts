@@ -37,6 +37,8 @@ export interface RagResponse {
   answer: string;
   cited_section: string;
   evidence?: string[];
+  recalled_long_term_memories?: string[];
+  short_term_turns_count?: number;
   model_used?: string;
   error?: string;
 }
@@ -90,11 +92,18 @@ export async function fetchTtsAudio(
 export async function querySoapRag(
   patientId: string,
   question: string,
+  shortTermHistory?: Array<{ role: string; content: string }>,
+  customMemories?: string[],
 ): Promise<RagResponse> {
   const res = await fetch(`${BASE}/api/rag`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ patient_id: patientId, question }),
+    body: JSON.stringify({
+      patient_id: patientId,
+      question,
+      short_term_history: shortTermHistory,
+      custom_memories: customMemories,
+    }),
   });
   if (!res.ok) {
     const errorText = await res.text();
