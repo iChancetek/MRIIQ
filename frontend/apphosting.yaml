@@ -10,11 +10,6 @@ runConfig:
   memoryMiB: 512
 
 env:
-  - variable: NEXT_PUBLIC_API_URL
-    value: https://api.mriiq.fit
-    availability:
-      - BUILD
-      - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
     value: quantiq221
     availability:
@@ -42,6 +37,11 @@ env:
       - RUNTIME
   - variable: NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
     value: "G-259J82Q4SG"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: OPENAI_MODEL
+    value: "gpt-5.6-terra"
     availability:
       - BUILD
       - RUNTIME

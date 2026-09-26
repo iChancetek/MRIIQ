@@ -1,9 +1,18 @@
 /**
  * api.ts — Typed API client for the MRI Prior Authorization backend.
- * All calls go to NEXT_PUBLIC_API_URL (default http://localhost:8000).
+ * Uses relative URL "" when running in browser on production (e.g. mriiq.fit),
+ * or NEXT_PUBLIC_API_URL when explicitly configured.
  */
 
-const BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+function getBaseUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL;
+  if (!envUrl || envUrl.includes("api.mriiq.fit")) {
+    return "";
+  }
+  return envUrl.replace(/\/+$/, "");
+}
+
+const BASE = getBaseUrl();
 
 /* ── Types ───────────────────────────────────────────────────────────────── */
 
