@@ -111,7 +111,7 @@ export default function Home() {
                     setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
                   }}
                 >
-                  P001 (Approve)
+                  P001
                 </button>
                 <button
                   type="button"
@@ -122,7 +122,7 @@ export default function Home() {
                     setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
                   }}
                 >
-                  P002 (Deny — Physio)
+                  P002
                 </button>
                 <button
                   type="button"
@@ -133,7 +133,7 @@ export default function Home() {
                     setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
                   }}
                 >
-                  P003 (Deny — Inactive Plan)
+                  P003
                 </button>
               </div>
 

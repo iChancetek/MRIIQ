@@ -363,7 +363,7 @@ origins = [
 
 ## 🖥 Frontend Features & UI Capabilities
 
-- **Quick Presets**: Single-click testing buttons for **P001 (Approve)**, **P002 (Deny — Physio)**, and **P003 (Deny — Inactive Plan)**.
+- **Quick Presets**: Single-click testing buttons for **P001**, **P002**, and **P003**.
 - **Embedded Document Preview**: Live preview of the synthetic clinical chart PDF directly in the review screen.
 - **Fact Extraction Cards**: Real-time display of conservative therapy duration (`pain_weeks`), physical therapy history (`physio_weeks`), and coverage status with visual status pills.
 - **OpenAI TTS Accessibility Audio**: One-click voice readback of the authorization decision and denial reasons via `tts-1-hd` (`onyx`).
