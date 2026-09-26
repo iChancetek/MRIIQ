@@ -1,0 +1,12 @@
+SYNTHETIC DATA — NOT A REAL PATIENT
+FOR DEMONSTRATION ONLY
+
+Patient ID: P003
+Name: Casey Kim
+Plan Status: Inactive
+
+Clinical Note:
+Patient presents with continuous lower back pain for 12 weeks.
+No physiotherapy was tried.
+Insurance verification indicates coverage is inactive.
+Ordering physician requests Lumbar Spine MRI.

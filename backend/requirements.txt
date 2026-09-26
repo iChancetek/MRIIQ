@@ -1,0 +1,9 @@
+fastapi==0.141.1
+uvicorn==0.54.0
+pydantic==2.13.5
+python-dotenv==1.2.3
+openai==3.19.2
+mcp==2.2.0
+langgraph==1.2.12
+langchain-core==1.6.5
+reportlab==5.0.1

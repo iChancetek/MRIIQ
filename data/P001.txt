@@ -1,0 +1,11 @@
+SYNTHETIC DATA — NOT A REAL PATIENT
+FOR DEMONSTRATION ONLY
+
+Patient ID: P001
+Name: Alex Morgan
+Plan Status: Active
+
+Clinical Note:
+Patient presents with chronic lower back pain for 10 weeks.
+Completed conservative physiotherapy for 8 weeks with persistent symptoms.
+Ordering physician requests Lumbar Spine MRI without contrast.

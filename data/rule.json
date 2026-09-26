@@ -1,0 +1,9 @@
+{
+  "rule_id": "MRI-LUMBAR-001",
+  "name": "Lumbar Spine MRI Prior Authorization Clinical Policy",
+  "version": "2026.1",
+  "min_pain_weeks": 6,
+  "min_physio_weeks": 6,
+  "require_active_plan": true,
+  "description": "Lumbar spine MRI prior authorization requires an active insurance plan, minimum 6 weeks of documented back pain, and minimum 6 weeks of conservative physiotherapy treatment."
+}

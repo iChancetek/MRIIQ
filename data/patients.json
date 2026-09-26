@@ -1,0 +1,17 @@
+{
+  "P001": {
+    "patient_id": "P001",
+    "name": "Alex Morgan",
+    "plan_active": true
+  },
+  "P002": {
+    "patient_id": "P002",
+    "name": "Jordan Lee",
+    "plan_active": true
+  },
+  "P003": {
+    "patient_id": "P003",
+    "name": "Casey Kim",
+    "plan_active": false
+  }
+}

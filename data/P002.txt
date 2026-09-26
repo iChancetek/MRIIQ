@@ -1,0 +1,11 @@
+SYNTHETIC DATA — NOT A REAL PATIENT
+FOR DEMONSTRATION ONLY
+
+Patient ID: P002
+Name: Jordan Lee
+Plan Status: Active
+
+Clinical Note:
+Patient presents with lumbar back pain for 9 weeks following work-related exertion.
+Patient has not completed physical therapy. Physiotherapy was discussed but absent from recent treatment history.
+Ordering physician requests Lumbar Spine MRI without contrast.
