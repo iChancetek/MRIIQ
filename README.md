@@ -313,38 +313,51 @@ Start the backend and frontend servers as usual, then navigate directly to:
 
 ---
 
-### 3. DNS & Production Deployment Configuration
-When deploying the application to production under `mriiq.fit`:
+### 3. Firebase App Hosting Configuration (Backend: `mriiq`)
 
-1. **DNS Records (at your domain registrar or Cloudflare)**:
-   | Type | Name / Host | Value / Target | Description |
-   |---|---|---|---|
-   | **A** | `@` | `<Hosting IP>` (e.g. `76.76.21.21` for Vercel) | Points root domain `mriiq.fit` to frontend |
-   | **CNAME** | `www` | `cname.vercel-dns.com` (or provider CNAME) | Points `www.mriiq.fit` to frontend |
-   | **CNAME** | `api` | `<Backend Host>` (e.g. Railway, Render, Fly.io) | Points `api.mriiq.fit` to FastAPI backend |
+The frontend is deployed on **Firebase App Hosting** in Google Cloud region `us-east4`:
 
-2. **Production Environment Variables**:
-   In your production deployment settings (Vercel / Cloudflare / Firebase):
-   ```env
-   NEXT_PUBLIC_API_URL=https://api.mriiq.fit
-   ```
-   In your backend production settings:
-   ```env
-   BACKEND_URL=https://api.mriiq.fit
-   ```
+| Setting | Value |
+|---|---|
+| **Project** | `quantiq221` (QuantIQ) |
+| **Backend Name** | `mriiq` |
+| **Region** | `us-east4` |
+| **Primary Domain** | [https://mriiq.fit](https://mriiq.fit) |
+| **Default App Hosting Domain** | [https://mriiq--quantiq221.us-east4.hosted.app](https://mriiq--quantiq221.us-east4.hosted.app) |
 
-3. **CORS Configuration**:
-   The FastAPI backend is pre-configured in `backend/app/main.py` with CORS support for all `mriiq.fit` subdomains and local ports:
-   ```python
-   origins = [
-       "http://localhost:3000",
-       "http://127.0.0.1:3000",
-       "http://mriiq.fit:3000",
-       "https://mriiq.fit",
-       "https://www.mriiq.fit",
-       "https://api.mriiq.fit",
-   ]
-   ```
+#### Quick Links:
+- 📊 [App Hosting Overview](https://console.firebase.google.com/u/0/project/quantiq221/apphosting/backends/mriiq/locations/us-east4/overview)
+- 🚀 [Rollouts & Deployment History](https://console.firebase.google.com/u/0/project/quantiq221/apphosting/backends/mriiq/locations/us-east4/rollouts)
+- 📝 [Build & Runtime Logs](https://console.firebase.google.com/u/0/project/quantiq221/apphosting/backends/mriiq/locations/us-east4/overview#)
+
+#### CI/CD & Automated Rollouts:
+Firebase App Hosting is connected to the GitHub repository [`iChancetek/MRIIQ`](https://github.com/iChancetek/MRIIQ).  
+Every `git push origin main` automatically triggers a zero-downtime rollout building the Next.js production bundle.
+
+#### `apphosting.yaml` Configuration:
+The project includes `apphosting.yaml` (in both repo root and `frontend/`) defining runtime resources and environment variables:
+```yaml
+runConfig:
+  minInstances: 0
+  maxInstances: 2
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+```
+
+#### CORS Support:
+The FastAPI backend (`backend/app/main.py`) allows requests from both domains:
+```python
+origins = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://mriiq.fit:3000",
+    "https://mriiq.fit",
+    "https://www.mriiq.fit",
+    "https://mriiq--quantiq221.us-east4.hosted.app",
+    "https://api.mriiq.fit",
+]
+```
 
 ---
 
