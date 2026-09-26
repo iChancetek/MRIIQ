@@ -100,6 +100,56 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="MRIIQ" />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
+              var suppressed = [
+                'MaxListenersExceededWarning',
+                'contentscript.js',
+                'ObjectMultiplex',
+                'app-init-liveness',
+                'background-liveness',
+                'EventEmitter memory leak',
+                'close listeners added',
+                'end listeners added'
+              ];
+              function shouldSuppress(args) {
+                if (!args) return false;
+                for (var i = 0; i < args.length; i++) {
+                  var item = args[i];
+                  var text = '';
+                  if (typeof item === 'string') {
+                    text = item;
+                  } else if (item && typeof item === 'object') {
+                    text = (item.message || '') + ' ' + (item.stack || '') + ' ' + (item.name || '');
+                  }
+                  for (var j = 0; j < suppressed.length; j++) {
+                    if (text.indexOf(suppressed[j]) !== -1) return true;
+                  }
+                }
+                return false;
+              }
+              var origWarn = console.warn;
+              console.warn = function() {
+                if (shouldSuppress(arguments)) return;
+                origWarn.apply(console, arguments);
+              };
+              var origError = console.error;
+              console.error = function() {
+                if (shouldSuppress(arguments)) return;
+                origError.apply(console, arguments);
+              };
+              if (typeof window !== 'undefined') {
+                window.addEventListener('error', function(e) {
+                  if (shouldSuppress([e.message, e.filename, e.error])) {
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                  }
+                }, true);
+              }
+            })();`,
+          }}
+        />
       </head>
       <body>
         <PWARegistration />

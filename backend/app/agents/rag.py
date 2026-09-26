@@ -55,6 +55,20 @@ def normalize_id(patient_id: str) -> str:
     return clean
 
 
+def detect_patient_in_text(text: str) -> Optional[str]:
+    """Detect if a patient's name or ID is mentioned in text."""
+    if not text:
+        return None
+    lower = text.lower()
+    if re.search(r"\b(p0*1|patient\s*1|pt\s*1|alex(\s+morgan)?)\b", lower) or "alex morgan" in lower:
+        return "P001"
+    if re.search(r"\b(p0*2|patient\s*2|pt\s*2|jordan(\s+lee)?)\b", lower) or "jordan lee" in lower:
+        return "P002"
+    if re.search(r"\b(p0*3|patient\s*3|pt\s*3|casey(\s+kim)?)\b", lower) or "casey kim" in lower:
+        return "P003"
+    return None
+
+
 def load_long_term_memories(patient_id: str) -> List[str]:
     """Load persistent long-term memories for a patient."""
     pid = normalize_id(patient_id)
@@ -231,7 +245,23 @@ def query_clinical_rag(
     1. Short-Term Memory: Ephemeral conversation history across user/assistant turns.
     2. Long-Term Memory: Recalled persistent patient profile and clinical annotations.
     """
-    pid = normalize_id(patient_id)
+    detected_pid = detect_patient_in_text(question)
+    raw_pid = detected_pid or patient_id or ""
+
+    if not raw_pid:
+        return RagResponse(
+            patient_id="",
+            patient_name="",
+            question=question,
+            answer="No patient is currently selected, and no patient name or ID was found in your query.\n\nPlease select a patient ID (P001, P002, P003) or mention a patient's name (e.g., Alex Morgan, Jordan Lee, Casey Kim) or ID in your query to retrieve clinical SOAP documentation.",
+            cited_section="Notice",
+            evidence=[],
+            recalled_long_term_memories=[],
+            short_term_turns_count=len(short_term_history or []),
+            model_used="assistant-gatekeeper",
+        )
+
+    pid = normalize_id(raw_pid)
     name = PATIENT_NAMES.get(pid, f"Patient {pid}")
     doc_text = load_soap_doc(pid)
     

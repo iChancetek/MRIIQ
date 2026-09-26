@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { SOAP_PATIENTS, type SoapPatientRecord } from "@/lib/soapData";
+import { useState, useEffect } from "react";
+import { SOAP_PATIENTS, detectPatientInText, type SoapPatientRecord } from "@/lib/soapData";
 import { querySoapRag, type RagResponse } from "@/lib/api";
 import { speakText, stopSpeech } from "@/lib/speech";
 
 interface Props {
   selectedPatientId?: string;
   onSelectPatient?: (id: string) => void;
+  onClear?: () => void;
 }
 
 type SoapTab = "S" | "O" | "A" | "P";
@@ -20,30 +21,10 @@ interface ChatMessage {
   evidence?: string[];
 }
 
-function getPatientSoapBriefing(p: SoapPatientRecord): string {
-  return `📋 **Physician Clinical Documentation (SOAP Notes) — ${p.name} (${p.id}):**\n\n` +
-    `• **[S] Subjective**: ${p.subjective.chief_complaint}\n` +
-    `  - *HPI*: ${p.subjective.hpi}\n` +
-    `  - *Pain Duration*: ${p.subjective.pain_duration_weeks} weeks (VAS ${p.subjective.pain_severity_vas})\n` +
-    `  - *Functional Limitations*: ${p.subjective.functional_impact}\n\n` +
-    `• **[O] Objective**: ${p.objective.vitals}\n` +
-    `  - *Physical Exam*: ${p.objective.physical_exam}\n` +
-    `  - *Neurological*: ${p.objective.neuro_exam}\n` +
-    `  - *Straight Leg Raise (SLR)*: ${p.objective.slr_test}\n` +
-    `  - *Supervised Physiotherapy*: ${p.objective.physio_duration_weeks} weeks completed (${p.objective.physio_attempted ? "YES" : "NO"}). ${p.objective.physio_notes}\n\n` +
-    `• **[A] Assessment**: ${p.assessment.diagnoses.join("; ")}\n` +
-    `  - *Medical Criteria*: Plan Active: ${p.assessment.criteria_plan_active ? "✅" : "❌"} | Pain ≥6w: ${p.assessment.criteria_pain_duration_met ? "✅" : "❌"} | Physio ≥6w: ${p.assessment.criteria_physio_met ? "✅" : "❌"}\n` +
-    `  - *Determination*: **${p.assessment.recommendation}**${p.assessment.denial_reasons.length > 0 ? " — Denial Reasons: " + p.assessment.denial_reasons.join(". ") : " (All prior authorization criteria satisfied)"}\n\n` +
-    `• **[P] Plan**: Procedure requested: ${p.plan.procedure_requested} (${p.plan.cpt_code})\n` +
-    `  - *Orders*: ${p.plan.orders.join("; ")}\n` +
-    `  - *Medications*: ${p.plan.medications.join("; ")}\n` +
-    `  - *Follow-up*: ${p.plan.follow_up}\n\n` +
-    `💡 *Clinical RAG Q&A Assistant ready. Ask any question below to inspect or cross-examine documentation.*`;
-}
-
 export default function SOAPRagChat({
   selectedPatientId = "P001",
   onSelectPatient,
+  onClear,
 }: Props) {
   const [activePatientId, setActivePatientId] = useState(selectedPatientId);
   const [activeTab, setActiveTab] = useState<SoapTab>("S");
@@ -54,36 +35,27 @@ export default function SOAPRagChat({
   const patient: SoapPatientRecord =
     SOAP_PATIENTS[activePatientId] || SOAP_PATIENTS["P001"];
 
-  // Initialize with immediate full clinical documentation briefing!
-  const [messages, setMessages] = useState<ChatMessage[]>([
-    {
-      id: "initial-briefing",
-      role: "assistant",
-      content: getPatientSoapBriefing(SOAP_PATIENTS[selectedPatientId] || SOAP_PATIENTS["P001"]),
-      citedSection: "SOAP Record",
-    },
-  ]);
+  // Blank by default per user specification
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
 
-  // Sync prop changes
+  // Sync prop changes without injecting unsolicited briefings
   useEffect(() => {
     if (selectedPatientId && selectedPatientId !== activePatientId) {
-      handlePatientChange(selectedPatientId);
+      setActivePatientId(selectedPatientId);
     }
-  }, [selectedPatientId]);
+  }, [selectedPatientId, activePatientId]);
 
   const handlePatientChange = (id: string) => {
     setActivePatientId(id);
     onSelectPatient?.(id);
-    const targetPatient = SOAP_PATIENTS[id] || SOAP_PATIENTS["P001"];
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `switch-${Date.now()}`,
-        role: "assistant",
-        content: getPatientSoapBriefing(targetPatient),
-        citedSection: "SOAP Record",
-      },
-    ]);
+    // Keep RAG clean and blank until user queries
+  };
+
+  const handleClearData = () => {
+    stopSpeech();
+    setMessages([]);
+    setQuestion("");
+    setIsPlayingId(null);
   };
 
   const handleQuickQuery = (queryText: string) => {
@@ -94,6 +66,15 @@ export default function SOAPRagChat({
   const executeRagQuery = async (queryText: string) => {
     const q = queryText.trim();
     if (!q || isQuerying) return;
+
+    // Detect if patient name or ID is mentioned in the query
+    const detectedId = detectPatientInText(q);
+    let currentId = activePatientId;
+    if (detectedId && detectedId !== activePatientId) {
+      currentId = detectedId;
+      setActivePatientId(detectedId);
+      onSelectPatient?.(detectedId);
+    }
 
     const userMsgId = `user-${Date.now()}`;
     const userMsg: ChatMessage = {
@@ -107,7 +88,7 @@ export default function SOAPRagChat({
     setIsQuerying(true);
 
     try {
-      const res: RagResponse = await querySoapRag(activePatientId, q);
+      const res: RagResponse = await querySoapRag(currentId, q);
       const assistantMsg: ChatMessage = {
         id: `asst-${Date.now()}`,
         role: "assistant",
@@ -115,6 +96,15 @@ export default function SOAPRagChat({
         citedSection: res.cited_section,
         evidence: res.evidence,
       };
+
+      // Auto-focus the cited tab if relevant
+      if (res.cited_section) {
+        if (res.cited_section.includes("Subjective")) setActiveTab("S");
+        else if (res.cited_section.includes("Objective")) setActiveTab("O");
+        else if (res.cited_section.includes("Assessment")) setActiveTab("A");
+        else if (res.cited_section.includes("Plan")) setActiveTab("P");
+      }
+
       setMessages((prev) => [...prev, assistantMsg]);
     } catch (err) {
       const errorMsg: ChatMessage = {
@@ -166,20 +156,35 @@ export default function SOAPRagChat({
             <div>
               <div className="card-title">Physician Clinical Documentation (SOAP Notes) &amp; RAG Q&amp;A</div>
               <div className="card-subtitle">
-                Synthesized EHR records in SOAP format with grounded clinical query engine
+                Grounded clinical documentation retrieval engine for prior authorization
               </div>
             </div>
 
-            <a
-              href={`/mock-pdfs/${patient.id}.pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-ghost"
-              style={{ fontSize: "0.8rem", padding: "6px 12px" }}
-              id="btn-view-soap-pdf"
-            >
-              📄 View Official SOAP Note PDF ({patient.id}) ↗
-            </a>
+            <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: "0.8rem", padding: "6px 12px", color: "var(--text-secondary)" }}
+                onClick={() => {
+                  handleClearData();
+                  onClear?.();
+                }}
+                id="btn-clear-soap-rag"
+                title="Clear patient documentation and Q&A findings"
+              >
+                🗑️ Clear Info
+              </button>
+              <a
+                href={`/mock-pdfs/${patient.id}.pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-ghost"
+                style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                id="btn-view-soap-pdf"
+              >
+                📄 View SOAP PDF ({patient.id}) ↗
+              </a>
+            </div>
           </div>
         </div>
       </div>
@@ -202,269 +207,312 @@ export default function SOAPRagChat({
         })}
       </div>
 
-      {/* Patient Metadata Bar */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "10px",
-          background: "var(--bg-glass)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-sm)",
-          padding: "12px 16px",
-          marginBottom: "18px",
-          fontSize: "0.82rem",
-        }}
-      >
-        <div>
-          <span style={{ color: "var(--text-muted)" }}>Patient: </span>
-          <strong>{patient.name}</strong> ({patient.gender}, {patient.dob})
+      {/* When blank (no queries executed yet), display clean query launchpad */}
+      {messages.length === 0 ? (
+        <div
+          style={{
+            background: "var(--bg-glass)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-md)",
+            padding: "28px 20px",
+            textAlign: "center",
+            marginBottom: "20px",
+          }}
+        >
+          <div style={{ fontSize: "1.8rem", marginBottom: "8px" }}>🩺</div>
+          <div style={{ fontWeight: 600, fontSize: "1rem", color: "var(--text-primary)", marginBottom: "6px" }}>
+            Clinical RAG Ready — Blank by Default
+          </div>
+          <p style={{ color: "var(--text-muted)", fontSize: "0.86rem", maxWidth: "520px", margin: "0 auto 16px", lineHeight: 1.5 }}>
+            Physician Clinical Documentation (SOAP Notes) and Q&amp;A findings appear when you query patient <strong>{patient.name} ({patient.id})</strong>. Click a clinical chip or type a question below.
+          </p>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "center" }}>
+            {[
+              "Did patient complete 6 weeks of physiotherapy?",
+              "What are the straight leg raise findings?",
+              "What is the prior authorization assessment?",
+              "What is the requested procedure and CPT code?",
+            ].map((chip, idx) => (
+              <button
+                key={idx}
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: "0.8rem", padding: "6px 12px", border: "1px solid var(--border)" }}
+                onClick={() => handleQuickQuery(chip)}
+                disabled={isQuerying}
+              >
+                🔍 {chip}
+              </button>
+            ))}
+          </div>
         </div>
-        <div>
-          <span style={{ color: "var(--text-muted)" }}>Insurance Plan: </span>
-          <span
+      ) : (
+        <>
+          {/* Patient Metadata Bar (shown once queried) */}
+          <div
             style={{
-              color: patient.assessment.criteria_plan_active ? "var(--approve)" : "var(--deny)",
-              fontWeight: 600,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+              gap: "10px",
+              background: "var(--bg-glass)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-sm)",
+              padding: "12px 16px",
+              marginBottom: "18px",
+              fontSize: "0.82rem",
             }}
           >
-            {patient.plan_name} ({patient.plan_status})
-          </span>
-        </div>
-        <div>
-          <span style={{ color: "var(--text-muted)" }}>Attending Provider: </span>
-          <span>{patient.provider}</span>
-        </div>
-        <div>
-          <span style={{ color: "var(--text-muted)" }}>Date of Service: </span>
-          <span>{patient.dos}</span>
-        </div>
-      </div>
-
-      {/* SOAP Section Tabs */}
-      <div style={{ display: "flex", gap: "6px", borderBottom: "1px solid var(--border)", marginBottom: "14px" }}>
-        {[
-          { tab: "S" as SoapTab, label: "[S] Subjective", color: "#38bdf8" },
-          { tab: "O" as SoapTab, label: "[O] Objective", color: "#818cf8" },
-          { tab: "A" as SoapTab, label: "[A] Assessment", color: "#34d399" },
-          { tab: "P" as SoapTab, label: "[P] Plan", color: "#fbbf24" },
-        ].map((item) => {
-          const isActive = activeTab === item.tab;
-          return (
-            <button
-              key={item.tab}
-              type="button"
-              onClick={() => setActiveTab(item.tab)}
-              style={{
-                background: isActive ? "rgba(255, 255, 255, 0.08)" : "transparent",
-                color: isActive ? item.color : "var(--text-secondary)",
-                border: "none",
-                borderBottom: isActive ? `2px solid ${item.color}` : "2px solid transparent",
-                padding: "8px 14px",
-                fontSize: "0.85rem",
-                fontWeight: 600,
-                cursor: "pointer",
-                transition: "all var(--transition-fast)",
-              }}
-            >
-              {item.label}
-            </button>
-          );
-        })}
-
-        <button
-          type="button"
-          className="btn btn-ghost"
-          style={{
-            marginLeft: "auto",
-            padding: "4px 10px",
-            fontSize: "0.78rem",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "5px",
-          }}
-          onClick={() => handleToggleSpeak(`tab-${activeTab}`, getSectionTextForSpeech())}
-          title="Listen to this SOAP section"
-        >
-          {isPlayingId === `tab-${activeTab}` ? (
-            <>
-              <span style={{ color: "var(--deny)" }}>⏹</span>
-              <span>Stop Audio</span>
-            </>
-          ) : (
-            <>
-              <span style={{ color: "var(--accent)" }}>🔊</span>
-              <span>Listen to Section</span>
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* Tab Content Display */}
-      <div
-        style={{
-          background: "var(--bg-glass)",
-          border: "1px solid var(--border)",
-          borderRadius: "var(--radius-md)",
-          padding: "16px 20px",
-          marginBottom: "24px",
-          fontSize: "0.9rem",
-          lineHeight: 1.6,
-        }}
-      >
-        {activeTab === "S" && (
-          <div>
-            <div style={{ fontWeight: 600, color: "var(--accent)", marginBottom: "6px" }}>
-              Chief Complaint &amp; History of Present Illness (HPI)
+            <div>
+              <span style={{ color: "var(--text-muted)" }}>Patient: </span>
+              <strong>{patient.name}</strong> ({patient.gender}, {patient.dob})
             </div>
-            <p style={{ marginBottom: "12px" }}>
-              <strong>Chief Complaint:</strong> {patient.subjective.chief_complaint}
-            </p>
-            <p style={{ marginBottom: "12px", color: "var(--text-secondary)" }}>
-              {patient.subjective.hpi}
-            </p>
-            <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "0.85rem" }}>
-              <div>
-                <span style={{ color: "var(--text-muted)" }}>Pain Duration: </span>
-                <strong>{patient.subjective.pain_duration_weeks} weeks</strong>
-              </div>
-              <div>
-                <span style={{ color: "var(--text-muted)" }}>VAS Severity: </span>
-                <strong>{patient.subjective.pain_severity_vas}</strong>
-              </div>
-              <div>
-                <span style={{ color: "var(--text-muted)" }}>Functional Impact: </span>
-                <span>{patient.subjective.functional_impact}</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "O" && (
-          <div>
-            <div style={{ fontWeight: 600, color: "#818cf8", marginBottom: "6px" }}>
-              Physical Examination &amp; Objective Findings
-            </div>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Vitals:</strong> {patient.objective.vitals}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Physical Exam:</strong> {patient.objective.physical_exam}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Neurological Evaluation:</strong> {patient.objective.neuro_exam}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Straight Leg Raise (SLR):</strong> {patient.objective.slr_test}
-            </p>
-            <div
-              style={{
-                marginTop: "10px",
-                padding: "10px 14px",
-                background: patient.objective.physio_attempted
-                  ? "rgba(52, 211, 153, 0.08)"
-                  : "rgba(248, 113, 113, 0.08)",
-                border: `1px solid ${patient.objective.physio_attempted ? "rgba(52, 211, 153, 0.2)" : "rgba(248, 113, 113, 0.2)"}`,
-                borderRadius: "var(--radius-sm)",
-              }}
-            >
-              <strong>Supervised Physiotherapy: </strong>
-              {patient.objective.physio_attempted
-                ? `Completed ${patient.objective.physio_duration_weeks} weeks.`
-                : "None attempted (0 weeks)."}
-              <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "4px" }}>
-                {patient.objective.physio_notes}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "A" && (
-          <div>
-            <div style={{ fontWeight: 600, color: "var(--approve)", marginBottom: "6px" }}>
-              Clinical Assessment &amp; Authorization Criteria Checklist
-            </div>
-            <div style={{ marginBottom: "10px" }}>
-              <strong>Diagnoses:</strong>
-              <ul style={{ paddingLeft: "20px", marginTop: "4px" }}>
-                {patient.assessment.diagnoses.map((d, i) => (
-                  <li key={i}>{d}</li>
-                ))}
-              </ul>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "8px",
-                marginTop: "12px",
-                padding: "12px",
-                background: "rgba(255, 255, 255, 0.03)",
-                borderRadius: "var(--radius-sm)",
-              }}
-            >
-              <div>
-                Active Health Plan:{" "}
-                {patient.assessment.criteria_plan_active ? "✅ Satisfied" : "❌ Not Met"}
-              </div>
-              <div>
-                Pain Duration ≥ 6 Weeks:{" "}
-                {patient.assessment.criteria_pain_duration_met ? "✅ Satisfied" : "❌ Not Met"}
-              </div>
-              <div>
-                Physiotherapy ≥ 6 Weeks:{" "}
-                {patient.assessment.criteria_physio_met ? "✅ Satisfied" : "❌ Not Met"}
-              </div>
-            </div>
-
-            <div style={{ marginTop: "12px" }}>
-              <strong>Prior Auth Determination: </strong>
+            <div>
+              <span style={{ color: "var(--text-muted)" }}>Insurance Plan: </span>
               <span
-                className={`status-badge ${patient.assessment.recommendation === "APPROVE" ? "approve" : "deny"}`}
+                style={{
+                  color: patient.assessment.criteria_plan_active ? "var(--approve)" : "var(--deny)",
+                  fontWeight: 600,
+                }}
               >
-                ● {patient.assessment.recommendation}
+                {patient.plan_name} ({patient.plan_status})
               </span>
             </div>
+            <div>
+              <span style={{ color: "var(--text-muted)" }}>Attending Provider: </span>
+              <span>{patient.provider}</span>
+            </div>
+            <div>
+              <span style={{ color: "var(--text-muted)" }}>Date of Service: </span>
+              <span>{patient.dos}</span>
+            </div>
+          </div>
 
-            {patient.assessment.denial_reasons.length > 0 && (
-              <div style={{ marginTop: "8px" }}>
-                <span style={{ color: "var(--deny)", fontWeight: 600, fontSize: "0.85rem" }}>
-                  Denial Rationale:
-                </span>
-                <ul style={{ paddingLeft: "20px", marginTop: "4px", fontSize: "0.85rem" }}>
-                  {patient.assessment.denial_reasons.map((r, i) => (
-                    <li key={i} style={{ color: "var(--text-secondary)" }}>
-                      {r}
-                    </li>
-                  ))}
-                </ul>
+          {/* SOAP Section Tabs (shown once queried) */}
+          <div style={{ display: "flex", gap: "6px", borderBottom: "1px solid var(--border)", marginBottom: "14px" }}>
+            {[
+              { tab: "S" as SoapTab, label: "[S] Subjective", color: "#38bdf8" },
+              { tab: "O" as SoapTab, label: "[O] Objective", color: "#818cf8" },
+              { tab: "A" as SoapTab, label: "[A] Assessment", color: "#34d399" },
+              { tab: "P" as SoapTab, label: "[P] Plan", color: "#fbbf24" },
+            ].map((item) => {
+              const isActive = activeTab === item.tab;
+              return (
+                <button
+                  key={item.tab}
+                  type="button"
+                  onClick={() => setActiveTab(item.tab)}
+                  style={{
+                    background: isActive ? "rgba(255, 255, 255, 0.08)" : "transparent",
+                    color: isActive ? item.color : "var(--text-secondary)",
+                    border: "none",
+                    borderBottom: isActive ? `2px solid ${item.color}` : "2px solid transparent",
+                    padding: "8px 14px",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    transition: "all var(--transition-fast)",
+                  }}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{
+                marginLeft: "auto",
+                padding: "4px 10px",
+                fontSize: "0.78rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+              onClick={() => handleToggleSpeak(`tab-${activeTab}`, getSectionTextForSpeech())}
+              title="Listen to this SOAP section"
+            >
+              {isPlayingId === `tab-${activeTab}` ? (
+                <>
+                  <span style={{ color: "var(--deny)" }}>⏹</span>
+                  <span>Stop Audio</span>
+                </>
+              ) : (
+                <>
+                  <span style={{ color: "var(--accent)" }}>🔊</span>
+                  <span>Listen to Section</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* Tab Content Display */}
+          <div
+            style={{
+              background: "var(--bg-glass)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)",
+              padding: "16px 20px",
+              marginBottom: "24px",
+              fontSize: "0.9rem",
+              lineHeight: 1.6,
+            }}
+          >
+            {activeTab === "S" && (
+              <div>
+                <div style={{ fontWeight: 600, color: "var(--accent)", marginBottom: "6px" }}>
+                  Chief Complaint &amp; History of Present Illness (HPI)
+                </div>
+                <p style={{ marginBottom: "12px" }}>
+                  <strong>Chief Complaint:</strong> {patient.subjective.chief_complaint}
+                </p>
+                <p style={{ marginBottom: "12px", color: "var(--text-secondary)" }}>
+                  {patient.subjective.hpi}
+                </p>
+                <div style={{ display: "flex", gap: "16px", flexWrap: "wrap", fontSize: "0.85rem" }}>
+                  <div>
+                    <span style={{ color: "var(--text-muted)" }}>Pain Duration: </span>
+                    <strong>{patient.subjective.pain_duration_weeks} weeks</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-muted)" }}>VAS Severity: </span>
+                    <strong>{patient.subjective.pain_severity_vas}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: "var(--text-muted)" }}>Functional Impact: </span>
+                    <span>{patient.subjective.functional_impact}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "O" && (
+              <div>
+                <div style={{ fontWeight: 600, color: "#818cf8", marginBottom: "6px" }}>
+                  Physical Examination &amp; Objective Findings
+                </div>
+                <p style={{ marginBottom: "8px" }}>
+                  <strong>Vitals:</strong> {patient.objective.vitals}
+                </p>
+                <p style={{ marginBottom: "8px" }}>
+                  <strong>Physical Exam:</strong> {patient.objective.physical_exam}
+                </p>
+                <p style={{ marginBottom: "8px" }}>
+                  <strong>Neurological Evaluation:</strong> {patient.objective.neuro_exam}
+                </p>
+                <p style={{ marginBottom: "8px" }}>
+                  <strong>Straight Leg Raise (SLR):</strong> {patient.objective.slr_test}
+                </p>
+                <div
+                  style={{
+                    marginTop: "10px",
+                    padding: "10px 14px",
+                    background: patient.objective.physio_attempted
+                      ? "rgba(52, 211, 153, 0.08)"
+                      : "rgba(248, 113, 113, 0.08)",
+                    border: `1px solid ${patient.objective.physio_attempted ? "rgba(52, 211, 153, 0.2)" : "rgba(248, 113, 113, 0.2)"}`,
+                    borderRadius: "var(--radius-sm)",
+                  }}
+                >
+                  <strong>Supervised Physiotherapy: </strong>
+                  {patient.objective.physio_attempted
+                    ? `Completed ${patient.objective.physio_duration_weeks} weeks.`
+                    : "None attempted (0 weeks)."}
+                  <div style={{ fontSize: "0.82rem", color: "var(--text-secondary)", marginTop: "4px" }}>
+                    {patient.objective.physio_notes}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeTab === "A" && (
+              <div>
+                <div style={{ fontWeight: 600, color: "var(--approve)", marginBottom: "6px" }}>
+                  Clinical Assessment &amp; Authorization Criteria Checklist
+                </div>
+                <div style={{ marginBottom: "10px" }}>
+                  <strong>Diagnoses:</strong>
+                  <ul style={{ paddingLeft: "20px", marginTop: "4px" }}>
+                    {patient.assessment.diagnoses.map((d, i) => (
+                      <li key={i}>{d}</li>
+                    ))}
+                  </ul>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "8px",
+                    marginTop: "12px",
+                    padding: "12px",
+                    background: "rgba(255, 255, 255, 0.03)",
+                    borderRadius: "var(--radius-sm)",
+                  }}
+                >
+                  <div>
+                    Active Health Plan:{" "}
+                    {patient.assessment.criteria_plan_active ? "✅ Satisfied" : "❌ Not Met"}
+                  </div>
+                  <div>
+                    Pain Duration ≥ 6 Weeks:{" "}
+                    {patient.assessment.criteria_pain_duration_met ? "✅ Satisfied" : "❌ Not Met"}
+                  </div>
+                  <div>
+                    Physiotherapy ≥ 6 Weeks:{" "}
+                    {patient.assessment.criteria_physio_met ? "✅ Satisfied" : "❌ Not Met"}
+                  </div>
+                </div>
+
+                <div style={{ marginTop: "12px" }}>
+                  <strong>Prior Auth Determination: </strong>
+                  <span
+                    className={`status-badge ${patient.assessment.recommendation === "APPROVE" ? "approve" : "deny"}`}
+                  >
+                    ● {patient.assessment.recommendation}
+                  </span>
+                </div>
+
+                {patient.assessment.denial_reasons.length > 0 && (
+                  <div style={{ marginTop: "8px" }}>
+                    <span style={{ color: "var(--deny)", fontWeight: 600, fontSize: "0.85rem" }}>
+                      Denial Rationale:
+                    </span>
+                    <ul style={{ paddingLeft: "20px", marginTop: "4px", fontSize: "0.85rem" }}>
+                      {patient.assessment.denial_reasons.map((r, i) => (
+                        <li key={i} style={{ color: "var(--text-secondary)" }}>
+                          {r}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === "P" && (
+              <div>
+                <div style={{ fontWeight: 600, color: "var(--warning)", marginBottom: "6px" }}>
+                  Plan of Care &amp; Clinical Orders
+                </div>
+                <p style={{ marginBottom: "8px" }}>
+                  <strong>Requested Procedure:</strong> {patient.plan.procedure_requested} (
+                  <code>{patient.plan.cpt_code}</code>)
+                </p>
+                <p style={{ marginBottom: "8px" }}>
+                  <strong>Clinical Orders:</strong> {patient.plan.orders.join("; ")}
+                </p>
+                <p style={{ marginBottom: "8px" }}>
+                  <strong>Prescribed Medications:</strong> {patient.plan.medications.join("; ")}
+                </p>
+                <p>
+                  <strong>Follow-up Instructions:</strong> {patient.plan.follow_up}
+                </p>
               </div>
             )}
           </div>
-        )}
-
-        {activeTab === "P" && (
-          <div>
-            <div style={{ fontWeight: 600, color: "var(--warning)", marginBottom: "6px" }}>
-              Plan of Care &amp; Clinical Orders
-            </div>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Requested Procedure:</strong> {patient.plan.procedure_requested} (
-              <code>{patient.plan.cpt_code}</code>)
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Clinical Orders:</strong> {patient.plan.orders.join("; ")}
-            </p>
-            <p style={{ marginBottom: "8px" }}>
-              <strong>Prescribed Medications:</strong> {patient.plan.medications.join("; ")}
-            </p>
-            <p>
-              <strong>Follow-up Instructions:</strong> {patient.plan.follow_up}
-            </p>
-          </div>
-        )}
-      </div>
+        </>
+      )}
 
       {/* ── Clinical RAG Assistant Q&A ──────────────────────────────── */}
       <div
@@ -473,16 +521,30 @@ export default function SOAPRagChat({
           paddingTop: "20px",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-          <span style={{ fontSize: "1.2rem" }}>💬</span>
-          <div>
-            <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>
-              Clinical RAG Assistant — Query Physician Documentation
-            </div>
-            <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-              Ask clinical questions about {patient.name} ({patient.id}) grounded in SOAP notes
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: "1.2rem" }}>💬</span>
+            <div>
+              <div style={{ fontSize: "0.95rem", fontWeight: 600, color: "var(--text-primary)" }}>
+                Clinical RAG Assistant — Query Physician Documentation
+              </div>
+              <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                Ask clinical questions about {patient.name} ({patient.id}) grounded in SOAP notes
+              </div>
             </div>
           </div>
+
+          {messages.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{ fontSize: "0.75rem", padding: "4px 8px" }}
+              onClick={handleClearData}
+              title="Clear queries"
+            >
+              🗑️ Clear
+            </button>
+          )}
         </div>
 
         {/* Suggestion Chips */}
@@ -518,116 +580,118 @@ export default function SOAPRagChat({
         </div>
 
         {/* Chat Messages */}
-        <div
-          style={{
-            maxHeight: "360px",
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: "12px",
-            padding: "12px",
-            background: "rgba(0, 0, 0, 0.25)",
-            borderRadius: "var(--radius-md)",
-            marginBottom: "14px",
-          }}
-          id="rag-chat-messages"
-        >
-          {messages.map((msg) => {
-            const isUser = msg.role === "user";
-            return (
+        {messages.length > 0 && (
+          <div
+            style={{
+              maxHeight: "360px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              padding: "12px",
+              background: "rgba(0, 0, 0, 0.25)",
+              borderRadius: "var(--radius-md)",
+              marginBottom: "14px",
+            }}
+            id="rag-chat-messages"
+          >
+            {messages.map((msg) => {
+              const isUser = msg.role === "user";
+              return (
+                <div
+                  key={msg.id}
+                  style={{
+                    alignSelf: isUser ? "flex-end" : "flex-start",
+                    maxWidth: "90%",
+                    background: isUser ? "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))" : "var(--bg-card)",
+                    border: `1px solid ${isUser ? "var(--border-accent)" : "var(--border)"}`,
+                    borderRadius: "var(--radius-md)",
+                    padding: "10px 14px",
+                    fontSize: "0.88rem",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {!isUser && msg.citedSection && (
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "0.7rem",
+                          fontWeight: 700,
+                          padding: "2px 8px",
+                          borderRadius: "100px",
+                          background: "var(--accent-soft)",
+                          color: "var(--accent)",
+                          textTransform: "uppercase",
+                          letterSpacing: "0.05em",
+                        }}
+                      >
+                        SOAP Section: {msg.citedSection}
+                      </span>
+
+                      <button
+                        type="button"
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: isPlayingId === msg.id ? "var(--deny)" : "var(--text-muted)",
+                          fontSize: "0.8rem",
+                          padding: "2px 6px",
+                        }}
+                        onClick={() => handleToggleSpeak(msg.id, msg.content)}
+                        title="Listen to response"
+                      >
+                        {isPlayingId === msg.id ? "⏹ Stop" : "🔊 Listen"}
+                      </button>
+                    </div>
+                  )}
+
+                  <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
+
+                  {msg.evidence && msg.evidence.length > 0 && (
+                    <div
+                      style={{
+                        marginTop: "8px",
+                        paddingTop: "6px",
+                        borderTop: "1px dashed var(--border)",
+                        fontSize: "0.78rem",
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      <em>Evidence:</em> {msg.evidence.join(" • ")}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {isQuerying && (
               <div
-                key={msg.id}
                 style={{
-                  alignSelf: isUser ? "flex-end" : "flex-start",
-                  maxWidth: "90%",
-                  background: isUser ? "linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(129, 140, 248, 0.2))" : "var(--bg-card)",
-                  border: `1px solid ${isUser ? "var(--border-accent)" : "var(--border)"}`,
+                  alignSelf: "flex-start",
+                  padding: "8px 14px",
+                  background: "var(--bg-card)",
                   borderRadius: "var(--radius-md)",
-                  padding: "10px 14px",
-                  fontSize: "0.88rem",
-                  lineHeight: 1.5,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "0.82rem",
+                  color: "var(--accent)",
                 }}
               >
-                {!isUser && msg.citedSection && (
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    <span
-                      style={{
-                        fontSize: "0.7rem",
-                        fontWeight: 700,
-                        padding: "2px 8px",
-                        borderRadius: "100px",
-                        background: "var(--accent-soft)",
-                        color: "var(--accent)",
-                        textTransform: "uppercase",
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      SOAP Section: {msg.citedSection}
-                    </span>
-
-                    <button
-                      type="button"
-                      style={{
-                        background: "none",
-                        border: "none",
-                        cursor: "pointer",
-                        color: isPlayingId === msg.id ? "var(--deny)" : "var(--text-muted)",
-                        fontSize: "0.8rem",
-                        padding: "2px 6px",
-                      }}
-                      onClick={() => handleToggleSpeak(msg.id, msg.content)}
-                      title="Listen to response"
-                    >
-                      {isPlayingId === msg.id ? "⏹ Stop" : "🔊 Listen"}
-                    </button>
-                  </div>
-                )}
-
-                <div style={{ whiteSpace: "pre-wrap" }}>{msg.content}</div>
-
-                {msg.evidence && msg.evidence.length > 0 && (
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      paddingTop: "6px",
-                      borderTop: "1px dashed var(--border)",
-                      fontSize: "0.78rem",
-                      color: "var(--text-muted)",
-                    }}
-                  >
-                    <em>Evidence:</em> {msg.evidence.join(" • ")}
-                  </div>
-                )}
+                <div className="spinner" style={{ width: 14, height: 14 }} />
+                <span>Querying SOAP documentation...</span>
               </div>
-            );
-          })}
-
-          {isQuerying && (
-            <div
-              style={{
-                alignSelf: "flex-start",
-                padding: "8px 14px",
-                background: "var(--bg-card)",
-                borderRadius: "var(--radius-md)",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "0.82rem",
-                color: "var(--accent)",
-              }}
-            >
-              <div className="spinner" style={{ width: 14, height: 14 }} />
-              <span>Querying SOAP documentation...</span>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
         {/* Input box */}
         <form

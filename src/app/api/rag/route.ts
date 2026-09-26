@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SOAP_PATIENTS, type SoapPatientRecord } from "@/lib/soapData";
+import { SOAP_PATIENTS, detectPatientInText, type SoapPatientRecord } from "@/lib/soapData";
 
 // Default persistent clinical memory bank per patient
 const DEFAULT_LONG_TERM_MEMORIES: Record<string, string[]> = {
@@ -116,8 +116,6 @@ function getFallbackAnswer(
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const rawPatientId = body.patient_id || "P001";
-    const patientId = normalizePatientId(rawPatientId);
     const question = (body.question || "").trim();
     const shortTermHistory = Array.isArray(body.short_term_history) ? body.short_term_history : [];
     const customMemories = Array.isArray(body.custom_memories) ? body.custom_memories : [];
@@ -126,7 +124,41 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Question is required" }, { status: 400 });
     }
 
-    const patient = SOAP_PATIENTS[patientId] || SOAP_PATIENTS["P001"];
+    // Detect if patient is mentioned in question text (e.g. Alex Morgan, Jordan Lee, Casey Kim, P001, etc.)
+    const detectedInQuestion = detectPatientInText(question);
+    const rawPatientId = detectedInQuestion || body.patient_id || "";
+
+    // If no patient ID is provided and no patient was mentioned in query
+    if (!rawPatientId) {
+      return NextResponse.json({
+        patient_id: "",
+        patient_name: "",
+        question,
+        answer:
+          "No patient is currently selected, and no patient name or ID was found in your query.\n\nPlease select a patient ID (P001, P002, P003) or mention a patient's name (e.g., Alex Morgan, Jordan Lee, Casey Kim) or ID in your query to retrieve clinical SOAP documentation.",
+        cited_section: "Notice",
+        evidence: [],
+        recalled_long_term_memories: [],
+        short_term_turns_count: shortTermHistory.length,
+        model_used: "assistant-gatekeeper",
+      });
+    }
+
+    const patientId = normalizePatientId(rawPatientId);
+    const patient = SOAP_PATIENTS[patientId];
+
+    if (!patient) {
+      return NextResponse.json({
+        patient_id: "",
+        patient_name: "",
+        question,
+        answer: `Patient "${patientId}" was not found in clinical records. Available patient IDs are P001 (Alex Morgan), P002 (Jordan Lee), and P003 (Casey Kim).`,
+        cited_section: "Notice",
+        evidence: [],
+        recalled_long_term_memories: [],
+        short_term_turns_count: shortTermHistory.length,
+      });
+    }
 
     // Combine default long-term memories with custom client memories
     const initialMemories = DEFAULT_LONG_TERM_MEMORIES[patient.id] || [];

@@ -1,0 +1,90 @@
+import { NextResponse } from "next/server";
+
+export const dynamic = "force-static";
+
+export async function GET() {
+  const manifest = {
+    name: "MRIIQ — Prior Authorization Intelligence",
+    short_name: "MRIIQ",
+    description:
+      "Enterprise Prior Authorization Engine for Lumbar Spine MRI with LangGraph HITL, OpenAI gpt-5.6-terra, SOAP Clinical Documentation, and Grounded Clinical RAG.",
+    start_url: "/",
+    id: "/",
+    display: "standalone",
+    background_color: "#0a0e17",
+    theme_color: "#0284c7",
+    orientation: "portrait-primary",
+    scope: "/",
+    categories: ["medical", "health", "productivity"],
+    icons: [
+      {
+        src: "/icon-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any maskable",
+      },
+      {
+        src: "/icons/icon-192x192.png",
+        sizes: "192x192",
+        type: "image/png",
+        purpose: "any maskable",
+      },
+      {
+        src: "/icon-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable",
+      },
+      {
+        src: "/icons/icon-512x512.png",
+        sizes: "512x512",
+        type: "image/png",
+        purpose: "any maskable",
+      },
+      {
+        src: "/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+        purpose: "any",
+      },
+      {
+        src: "/icons/apple-touch-icon.png",
+        sizes: "180x180",
+        type: "image/png",
+        purpose: "any",
+      },
+    ],
+    shortcuts: [
+      {
+        name: "Alex Morgan (P001)",
+        short_name: "P001",
+        description: "Review P001 Prior Authorization Case",
+        url: "/?patient=P001",
+        icons: [{ src: "/icon-192x192.png", sizes: "192x192" }],
+      },
+      {
+        name: "Jordan Lee (P002)",
+        short_name: "P002",
+        description: "Review P002 Prior Authorization Case",
+        url: "/?patient=P002",
+        icons: [{ src: "/icon-192x192.png", sizes: "192x192" }],
+      },
+      {
+        name: "Casey Kim (P003)",
+        short_name: "P003",
+        description: "Review P003 Prior Authorization Case",
+        url: "/?patient=P003",
+        icons: [{ src: "/icon-192x192.png", sizes: "192x192" }],
+      },
+    ],
+  };
+
+  return NextResponse.json(manifest, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/manifest+json; charset=utf-8",
+      "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}

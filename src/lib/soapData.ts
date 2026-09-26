@@ -211,3 +211,38 @@ export const SOAP_PATIENTS: Record<string, SoapPatientRecord> = {
       "Casey Kim (P003) is a 50-year-old patient with 12 weeks of chronic lower back pain. Payer verification returned INACTIVE/TERMINATED coverage, and no supervised physical therapy trial was attempted (0 weeks). Prior authorization cannot be approved under inactive insurance, and the prerequisite conservative trial has not been completed. Final Recommendation: DENY.",
   },
 };
+
+/**
+ * Detects whether a patient's name or ID is mentioned in the given text or query.
+ * Returns the matching patient ID ("P001", "P002", "P003") or null if none found.
+ */
+export function detectPatientInText(text: string): "P001" | "P002" | "P003" | null {
+  if (!text) return null;
+  const lower = text.toLowerCase();
+
+  // Check P001 / Alex Morgan
+  if (
+    /\b(p0*1|patient\s*1|pt\s*1|alex(\s+morgan)?)\b/i.test(lower) ||
+    lower.includes("alex morgan")
+  ) {
+    return "P001";
+  }
+
+  // Check P002 / Jordan Lee
+  if (
+    /\b(p0*2|patient\s*2|pt\s*2|jordan(\s+lee)?)\b/i.test(lower) ||
+    lower.includes("jordan lee")
+  ) {
+    return "P002";
+  }
+
+  // Check P003 / Casey Kim
+  if (
+    /\b(p0*3|patient\s*3|pt\s*3|casey(\s+kim)?)\b/i.test(lower) ||
+    lower.includes("casey kim")
+  ) {
+    return "P003";
+  }
+
+  return null;
+}

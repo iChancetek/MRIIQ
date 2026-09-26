@@ -15,8 +15,8 @@ import { authorize, submitReview, type AuthResponse } from "@/lib/api";
 type Phase = "input" | "loading" | "review" | "submitting" | "outcome";
 
 export default function Home() {
-  const [patientId, setPatientId] = useState("P001");
-  const [clinicalNote, setClinicalNote] = useState("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
+  const [patientId, setPatientId] = useState("");
+  const [clinicalNote, setClinicalNote] = useState("");
   const [phase, setPhase] = useState<Phase>("input");
   const [authResult, setAuthResult] = useState<AuthResponse | null>(null);
   const [finalOutcome, setFinalOutcome] = useState("");
@@ -62,24 +62,42 @@ export default function Home() {
     setAuthResult(null);
     setFinalOutcome("");
     setError("");
-    setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
+    setPatientId("");
+    setClinicalNote("");
   }
 
   return (
     <>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="app-header">
-        <img
-          src="/icons/icon-192x192.png"
-          alt="MRIIQ PWA Icon"
-          width="40"
-          height="40"
-          style={{
-            borderRadius: "10px",
-            boxShadow: "0 0 16px rgba(56, 189, 248, 0.4)",
-            border: "1px solid rgba(56, 189, 248, 0.3)",
-          }}
-        />
+        <div className="app-logo-card" title="Magnetic Resonance Imaging (MRI)">
+          <svg
+            viewBox="0 0 36 36"
+            width="26"
+            height="26"
+            fill="none"
+            xmlns="http://www.w3.org/2000/svg"
+            style={{ display: "block" }}
+          >
+            {/* Outer Circular Gantry Magnet */}
+            <circle cx="18" cy="17" r="13" stroke="url(#mriGantryGrad)" strokeWidth="2.75" />
+            {/* Magnetic Resonance Wave Rings */}
+            <circle cx="18" cy="17" r="9.5" stroke="#38bdf8" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.85" />
+            {/* Central Scanning Bore */}
+            <circle cx="18" cy="17" r="6" fill="#0b1120" stroke="#818cf8" strokeWidth="1.5" />
+            {/* Patient Scanning Table / Bed */}
+            <rect x="6" y="15.5" width="24" height="3" rx="1.5" fill="#38bdf8" />
+            <rect x="12" y="14" width="8" height="1.8" rx="0.9" fill="#ffffff" opacity="0.95" />
+            {/* Scanner Base Support */}
+            <path d="M12 29h12v2a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-2z" fill="#38bdf8" opacity="0.75" />
+            <defs>
+              <linearGradient id="mriGantryGrad" x1="5" y1="4" x2="31" y2="30" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#38bdf8" />
+                <stop offset="1" stopColor="#818cf8" />
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
         <div className="app-logo">
           MRI<span className="accent">IQ</span>
         </div>
@@ -157,6 +175,21 @@ export default function Home() {
                 >
                   P003
                 </button>
+                {patientId && (
+                  <button
+                    type="button"
+                    className="btn btn-ghost"
+                    style={{ padding: "4px 10px", fontSize: "0.8rem", color: "var(--text-muted)" }}
+                    onClick={() => {
+                      setPatientId("");
+                      setClinicalNote("");
+                    }}
+                    id="preset-clear"
+                    title="Clear patient selection"
+                  >
+                    ✕ Clear
+                  </button>
+                )}
               </div>
 
               <PatientInput value={patientId} onChange={setPatientId} />
@@ -245,20 +278,30 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── Interactive SOAP Clinical Documentation & RAG Q&A Assistant ────────────────────────────── */}
-        <SOAPRagChat
-          selectedPatientId={patientId}
-          onSelectPatient={(id) => {
-            setPatientId(id);
-            if (id === "P001") {
-              setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
-            } else if (id === "P002") {
-              setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
-            } else if (id === "P003") {
-              setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
-            }
-          }}
-        />
+        {/* ── Interactive SOAP Clinical Documentation & RAG Q&A Assistant (Only shown when patient ID is added or selected) ────────────────────────────── */}
+        {patientId.trim() && (
+          <div className="animate-in">
+            <SOAPRagChat
+              selectedPatientId={patientId.trim()}
+              onSelectPatient={(id) => {
+                setPatientId(id);
+                if (id === "P001") {
+                  setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
+                } else if (id === "P002") {
+                  setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
+                } else if (id === "P003") {
+                  setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
+                } else if (!id) {
+                  setClinicalNote("");
+                }
+              }}
+              onClear={() => {
+                setPatientId("");
+                setClinicalNote("");
+              }}
+            />
+          </div>
+        )}
 
         {/* ── Synthetic data notice ───────────────────────────────────── */}
         <div className="synthetic-notice">
@@ -277,7 +320,13 @@ export default function Home() {
             setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
           } else if (id === "P003") {
             setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
+          } else if (!id) {
+            setClinicalNote("");
           }
+        }}
+        onClear={() => {
+          setPatientId("");
+          setClinicalNote("");
         }}
       />
     </>
