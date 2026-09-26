@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { fetchTtsAudio } from "@/lib/api";
+import { useState } from "react";
+import { speakText, stopSpeech } from "@/lib/speech";
 
 interface Props {
   recommendation: string;
@@ -9,24 +9,26 @@ interface Props {
 }
 
 export default function TTSPlayer({ recommendation, denialReasons }: Props) {
-  const [loading, setLoading] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
-  const [error, setError] = useState("");
-  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
 
-  async function handlePlay() {
-    if (audioUrl) return; // already fetched
-    setLoading(true);
-    setError("");
-    try {
-      const blob = await fetchTtsAudio(recommendation, denialReasons);
-      const url = URL.createObjectURL(blob);
-      setAudioUrl(url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "TTS unavailable");
-    } finally {
-      setLoading(false);
+  const script =
+    `The prior authorization recommendation is ${recommendation}. ` +
+    (denialReasons.length > 0
+      ? `Reasons for denial include: ${denialReasons.join(". ")}.`
+      : "All clinical guidelines for lumbar spine MRI have been satisfied.");
+
+  function handleTogglePlay() {
+    if (isPlaying) {
+      stopSpeech();
+      setIsPlaying(false);
+      return;
     }
+
+    speakText(script, {
+      onStart: () => setIsPlaying(true),
+      onEnd: () => setIsPlaying(false),
+      onError: () => setIsPlaying(false),
+    });
   }
 
   return (
@@ -34,45 +36,31 @@ export default function TTSPlayer({ recommendation, denialReasons }: Props) {
       <div className="card-header">
         <div className="card-icon blue">🔊</div>
         <div>
-          <div className="card-title">Audio Summary</div>
+          <div className="card-title">Audio Recommendation Brief</div>
           <div className="card-subtitle">
-            Listen to the recommendation (OpenAI TTS)
+            Listen to prior authorization verdict (OpenAI TTS &amp; Universal Audio)
           </div>
         </div>
       </div>
 
-      {!audioUrl && !loading && (
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <button
-          className="btn btn-ghost"
-          onClick={handlePlay}
+          className={isPlaying ? "btn btn-deny" : "btn btn-ghost"}
+          onClick={handleTogglePlay}
           id="btn-play-tts"
         >
-          ▶ Generate Audio
+          {isPlaying ? "⏹ Stop Audio" : "▶ Listen to Verdict"}
         </button>
-      )}
 
-      {loading && (
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div className="spinner" style={{ width: 20, height: 20 }} />
-          <span style={{ color: "var(--text-secondary)", fontSize: "0.85rem" }}>
-            Generating speech...
-          </span>
-        </div>
-      )}
-
-      {error && (
-        <p style={{ color: "var(--deny)", fontSize: "0.85rem" }}>
-          {error}
-        </p>
-      )}
-
-      {audioUrl && (
-        <div className="audio-player">
-          <audio ref={audioRef} controls autoPlay src={audioUrl} id="tts-audio">
-            Your browser does not support audio playback.
-          </audio>
-        </div>
-      )}
+        {isPlaying && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div className="spinner" style={{ width: 18, height: 18 }} />
+            <span style={{ color: "var(--accent)", fontSize: "0.85rem", fontWeight: 500 }}>
+              Playing audio summary...
+            </span>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

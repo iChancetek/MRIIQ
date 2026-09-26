@@ -8,13 +8,14 @@ import HumanReview from "@/components/HumanReview";
 import MockPdfViewer from "@/components/MockPdfViewer";
 import TTSPlayer from "@/components/TTSPlayer";
 import FinalOutcome from "@/components/FinalOutcome";
+import SOAPRagChat from "@/components/SOAPRagChat";
 import { authorize, submitReview, type AuthResponse } from "@/lib/api";
 
 type Phase = "input" | "loading" | "review" | "submitting" | "outcome";
 
 export default function Home() {
   const [patientId, setPatientId] = useState("P001");
-  const [clinicalNote, setClinicalNote] = useState("");
+  const [clinicalNote, setClinicalNote] = useState("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
   const [phase, setPhase] = useState<Phase>("input");
   const [authResult, setAuthResult] = useState<AuthResponse | null>(null);
   const [finalOutcome, setFinalOutcome] = useState("");
@@ -60,7 +61,7 @@ export default function Home() {
     setAuthResult(null);
     setFinalOutcome("");
     setError("");
-    setClinicalNote("");
+    setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
   }
 
   return (
@@ -104,34 +105,37 @@ export default function Home() {
                 </span>
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                  className={patientId === "P001" ? "btn btn-primary" : "btn btn-ghost"}
+                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
                   onClick={() => {
                     setPatientId("P001");
                     setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
                   }}
+                  id="preset-p001"
                 >
                   P001
                 </button>
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                  className={patientId === "P002" ? "btn btn-primary" : "btn btn-ghost"}
+                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
                   onClick={() => {
                     setPatientId("P002");
                     setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
                   }}
+                  id="preset-p002"
                 >
                   P002
                 </button>
                 <button
                   type="button"
-                  className="btn btn-ghost"
-                  style={{ padding: "4px 10px", fontSize: "0.78rem" }}
+                  className={patientId === "P003" ? "btn btn-primary" : "btn btn-ghost"}
+                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
                   onClick={() => {
                     setPatientId("P003");
                     setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
                   }}
+                  id="preset-p003"
                 >
                   P003
                 </button>
@@ -155,9 +159,9 @@ export default function Home() {
                 <div className="card-header">
                   <div className="card-icon yellow">📄</div>
                   <div>
-                    <div className="card-title">Synthetic Clinical Document</div>
+                    <div className="card-title">Synthetic Clinical Document (SOAP Format)</div>
                     <div className="card-subtitle">
-                      Mock PDF for {patientId.trim().toUpperCase()}
+                      Formal Physician Clinical Report for {patientId.trim().toUpperCase()}
                     </div>
                   </div>
                 </div>
@@ -222,6 +226,21 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* ── Interactive SOAP Clinical Documentation & RAG Q&A Assistant ────────────────────────────── */}
+        <SOAPRagChat
+          selectedPatientId={patientId}
+          onSelectPatient={(id) => {
+            setPatientId(id);
+            if (id === "P001") {
+              setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
+            } else if (id === "P002") {
+              setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
+            } else if (id === "P003") {
+              setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
+            }
+          }}
+        />
 
         {/* ── Synthetic data notice ───────────────────────────────────── */}
         <div className="synthetic-notice">

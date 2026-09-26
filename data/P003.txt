@@ -1,12 +1,73 @@
 SYNTHETIC DATA — NOT A REAL PATIENT
-FOR DEMONSTRATION ONLY
+FOR DEMONSTRATION AND TESTING ONLY
 
+================================================================================
+PHYSICIAN CLINICAL DOCUMENTATION (SOAP FORMAT)
+================================================================================
 Patient ID: P003
-Name: Casey Kim
-Plan Status: Inactive
+Patient Name: Casey Kim
+DOB: 11/05/1976 (Age 50) | Gender: Non-binary
+Insurance Plan: UnitedHealthcare Choice Plus (Status: INACTIVE / TERMINATED)
+Date of Service: September 24, 2026
+Attending Provider: Dr. Robert Patel, MD (Internal Medicine, NPI: 1829304817)
+Facility: Community Health Partners, Clinic B
 
-Clinical Note:
-Patient presents with continuous lower back pain for 12 weeks.
-No physiotherapy was tried.
-Insurance verification indicates coverage is inactive.
-Ordering physician requests Lumbar Spine MRI.
+--------------------------------------------------------------------------------
+[S] SUBJECTIVE
+--------------------------------------------------------------------------------
+Chief Complaint:
+Chronic low back ache for 12 weeks.
+
+History of Present Illness (HPI):
+50-year-old patient reports 12 weeks of persistent lower back pain. Severity rated
+4-6/10. Aggravated by prolonged standing. Denies lower extremity radiation, weakness,
+numbness, or bladder changes. Patient states no physical therapy was ever tried.
+Patient was recently informed of health coverage transition.
+- Pain Duration: 12 weeks
+- Pain Severity (VAS): 4-6/10
+- Functional Impact: Discomfort with extended standing; able to perform desk work.
+
+--------------------------------------------------------------------------------
+[O] OBJECTIVE
+--------------------------------------------------------------------------------
+Vitals: BP 130/82 mmHg, HR 76 bpm, BMI 27.8.
+Physical Examination:
+Normal gait. Generalized lower lumbar tenderness. Full lumbar range of motion.
+Neurological Examination:
+Neurological examination intact throughout bilateral lower extremities.
+DTRs 2+ symmetrical.
+Straight Leg Raise (SLR):
+Straight Leg Raise test negative bilaterally.
+Conservative Therapy History:
+No physiotherapy attempted (0 weeks). Clearinghouse eligibility verification
+returned INACTIVE / TERMINATED policy coverage on date of service.
+
+--------------------------------------------------------------------------------
+[A] ASSESSMENT
+--------------------------------------------------------------------------------
+Diagnoses:
+1. Chronic low back pain (ICD-10 M54.5)
+2. Lumbosacral spondylosis without radiculopathy (ICD-10 M47.816)
+
+Prior Authorization Criteria Evaluation:
+- Active Health Plan Coverage: NO (Coverage Terminated)
+- Documented Pain Duration ≥ 6 Weeks: YES (12 weeks)
+- Completed Supervised Physiotherapy Trial ≥ 6 Weeks: NO (0 weeks completed)
+Recommendation: DENY
+Denial Reasons:
+1. Insurance plan is not active (Coverage Terminated).
+2. No physiotherapy was attempted (explicitly stated in clinical note).
+
+--------------------------------------------------------------------------------
+[P] PLAN
+--------------------------------------------------------------------------------
+Requested Procedure:
+Lumbar Spine MRI without contrast (CPT 72148).
+Clinical Orders:
+1. Patient instructed to resolve insurance reinstatement with benefits coordinator.
+2. Physical therapy referral on hold pending active coverage verification.
+3. Prior authorization cannot be granted under inactive policy coverage.
+Medications:
+- Acetaminophen 650mg Q6H PRN
+Follow-up:
+Re-contact clinic once coverage is active to schedule physical therapy.

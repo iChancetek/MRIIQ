@@ -1,8 +1,8 @@
 """
-LangGraph workflow state definition.
+LangGraph workflow state definition in Python.
 """
 from __future__ import annotations
-from typing import Any, Optional
+from typing import Any, Optional, List
 from pydantic import BaseModel
 
 
@@ -18,7 +18,7 @@ class AuthState(BaseModel):
     patient: dict = {}
     rule: dict = {}
 
-    # OpenAI extraction
+    # OpenAI extraction (gpt-5.6-terra)
     pain_weeks: Optional[float] = None
     physio_weeks: Optional[float] = None
     extraction_raw: str = ""
@@ -27,7 +27,13 @@ class AuthState(BaseModel):
     recommendation: str = ""          # "APPROVE" | "DENY"
     denial_reasons: list[str] = []
 
-    # Human review
+    # Agentic RAG Q&A (SOAP Clinical Documentation)
+    rag_query: Optional[str] = None
+    rag_answer: Optional[str] = None
+    rag_cited_section: Optional[str] = None
+    rag_evidence: List[str] = []
+
+    # Human review (HITL)
     human_decision: str = ""          # "approved" | "rejected"
     final_outcome: str = ""
 

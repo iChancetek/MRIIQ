@@ -30,6 +30,17 @@ export interface FinalOutcomeResponse {
   final_outcome: string;
 }
 
+export interface RagResponse {
+  patient_id: string;
+  patient_name: string;
+  question: string;
+  answer: string;
+  cited_section: string;
+  evidence?: string[];
+  model_used?: string;
+  error?: string;
+}
+
 /* ── API calls ───────────────────────────────────────────────────────────── */
 
 export async function authorize(
@@ -74,6 +85,22 @@ export async function fetchTtsAudio(
   });
   if (!res.ok) throw new Error(`tts failed: ${res.status}`);
   return res.blob();
+}
+
+export async function querySoapRag(
+  patientId: string,
+  question: string,
+): Promise<RagResponse> {
+  const res = await fetch(`${BASE}/api/rag`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ patient_id: patientId, question }),
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`RAG query failed (${res.status}): ${errorText}`);
+  }
+  return res.json();
 }
 
 export function mockPdfUrl(patientId: string): string {

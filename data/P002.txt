@@ -1,11 +1,74 @@
 SYNTHETIC DATA — NOT A REAL PATIENT
-FOR DEMONSTRATION ONLY
+FOR DEMONSTRATION AND TESTING ONLY
 
+================================================================================
+PHYSICIAN CLINICAL DOCUMENTATION (SOAP FORMAT)
+================================================================================
 Patient ID: P002
-Name: Jordan Lee
-Plan Status: Active
+Patient Name: Jordan Lee
+DOB: 09/23/1989 (Age 37) | Gender: Male
+Insurance Plan: Aetna Choice POS (Status: ACTIVE)
+Date of Service: September 24, 2026
+Attending Provider: Dr. Marcus Thorne, MD (Family & Sports Medicine, NPI: 1472839102)
+Facility: Oakridge Ambulatory Care Center, Suite 102
 
-Clinical Note:
-Patient presents with lumbar back pain for 9 weeks following work-related exertion.
-Patient has not completed physical therapy. Physiotherapy was discussed but absent from recent treatment history.
-Ordering physician requests Lumbar Spine MRI without contrast.
+--------------------------------------------------------------------------------
+[S] SUBJECTIVE
+--------------------------------------------------------------------------------
+Chief Complaint:
+Moderate low back stiffness and pain for 9 weeks.
+
+History of Present Illness (HPI):
+37-year-old presenting with 9 weeks of intermittent axial low back pain following
+home remodeling. Pain rated 5/10. Localized to lumbosacral junction without distal
+radiation below knee. No numbness, weakness, or constitutional symptoms. Patient
+reports taking occasional over-the-counter Ibuprofen. Patient explicitly notes
+that no formal physiotherapy or structured rehabilitation program was tried to date.
+- Pain Duration: 9 weeks
+- Pain Severity (VAS): 5/10
+- Functional Impact: Avoids heavy lifting; functional at desk job with mild discomfort.
+
+--------------------------------------------------------------------------------
+[O] OBJECTIVE
+--------------------------------------------------------------------------------
+Vitals: BP 118/74 mmHg, HR 68 bpm, Temp 98.6°F, BMI 26.0.
+Physical Examination:
+Normal unassisted gait. Mild midline lumbar tenderness over L3-L4. No paraspinal
+spasm. Lumbar flexion 65° without radicular symptoms.
+Neurological Examination:
+Motor 5/5 in all lower extremity groups. Sensation intact throughout L2-S1.
+Reflexes 2+ symmetrical.
+Straight Leg Raise (SLR):
+Straight Leg Raise test negative bilaterally.
+Conservative Therapy History:
+No physiotherapy attempted (0 weeks). Patient has not participated in any structured
+physical rehabilitation program.
+
+--------------------------------------------------------------------------------
+[A] ASSESSMENT
+--------------------------------------------------------------------------------
+Diagnoses:
+1. Non-specific mechanical low back pain (ICD-10 M54.50)
+2. Lumbar myofascial strain (ICD-10 S39.012A)
+
+Prior Authorization Criteria Evaluation:
+- Active Health Plan Coverage: YES (Active)
+- Documented Pain Duration ≥ 6 Weeks: YES (9 weeks)
+- Completed Supervised Physiotherapy Trial ≥ 6 Weeks: NO (0 weeks completed)
+Recommendation: DENY
+Denial Reasons:
+1. No physiotherapy was attempted (explicitly stated in clinical note).
+2. Failure to complete prerequisite trial of supervised physical therapy (minimum 6 weeks required prior to advanced neuroimaging).
+
+--------------------------------------------------------------------------------
+[P] PLAN
+--------------------------------------------------------------------------------
+Requested Procedure:
+Lumbar Spine MRI without contrast (CPT 72148).
+Clinical Orders:
+1. Referral issued for 6-week course of supervised outpatient physical therapy.
+2. Lumbar spine MRI deferred pending completion of conservative therapy trial.
+Medications:
+- Naproxen 500mg BID with food PRN
+Follow-up:
+Clinic re-evaluation in 6 weeks following completion of physical therapy.

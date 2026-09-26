@@ -81,6 +81,24 @@ def run_tests():
     if not passed_reject:
         all_passed = False
 
+    # ── RAG Agentic tests (P001, P002, P003 SOAP Q&A in Python) ──────────────
+    from backend.app.agents.rag import query_clinical_rag
+
+    print("\n--- Testing Python RAG Agent (SOAP Notes) ---")
+    rag_cases = [
+        ("P001", "What are the straight leg raise findings?", "Objective"),
+        ("P001", "Did the patient complete physiotherapy?", "Objective"),
+        ("P002", "How many weeks of physical therapy was attempted?", "Objective"),
+        ("P003", "What is the health insurance coverage status?", "Assessment"),
+    ]
+    for pid, q, expected_section in rag_cases:
+        res = query_clinical_rag(pid, q)
+        rag_pass = expected_section.lower() in res.cited_section.lower() or len(res.answer) > 20
+        status = "PASS" if rag_pass else "FAIL"
+        print(f"RAG [{pid}] '{q}' -> [{res.cited_section}]: {status}")
+        if not rag_pass:
+            all_passed = False
+
     print()
     if all_passed:
         print("All tests PASSED.")

@@ -7,6 +7,7 @@ from backend.app.graph.state import AuthState
 from backend.app.mcp.client import get_patient, get_rule
 from backend.app.agents.reader import extract_from_note
 from backend.app.agents.decision import make_decision
+from backend.app.agents.rag import query_clinical_rag
 
 
 # ── Node 1: Fetch patient data via MCP ──────────────────────────────────────
@@ -49,6 +50,23 @@ def node_decide(state: AuthState) -> dict:
     return {"recommendation": recommendation, "denial_reasons": denial_reasons}
 
 
+# ── Node 4: Agentic Clinical RAG Assistant ──────────────────────────────────
+def node_rag_assistant(state: AuthState) -> dict:
+    """
+    RAG Agentic Node: When a query is provided, retrieves the patient's
+    SOAP documentation and grounds the clinical answer in SOAP sections.
+    """
+    if not state.rag_query:
+        return {}
+    rag_res = query_clinical_rag(state.patient_id, state.rag_query)
+    return {
+        "rag_answer": rag_res.answer,
+        "rag_cited_section": rag_res.cited_section,
+        "rag_evidence": rag_res.evidence,
+    }
+
+
+# ── Node 5: Apply human review (HITL) ───────────────────────────────────────
 def node_apply_review(state: AuthState) -> dict:
     decision = (state.human_decision or "").strip().lower()
     if decision in ("yes", "y", "approve", "approved"):

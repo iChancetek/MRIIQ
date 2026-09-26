@@ -1,7 +1,7 @@
 """
 Pydantic models used across the application.
 """
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 
 
@@ -38,3 +38,20 @@ class AuthResponse(BaseModel):
 class FinalOutcomeResponse(BaseModel):
     """Backend → Frontend: final outcome after human review."""
     final_outcome: str
+
+
+class RagRequest(BaseModel):
+    """Frontend → Backend: query physician clinical documentation via RAG."""
+    patient_id: str
+    question: str
+
+
+class RagResponse(BaseModel):
+    """Backend → Frontend: RAG answer grounded in SOAP notes."""
+    patient_id: str
+    patient_name: str
+    question: str
+    answer: str
+    cited_section: str
+    evidence: List[str] = []
+    model_used: str = "gpt-5.6-terra"

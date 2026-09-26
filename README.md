@@ -6,11 +6,11 @@
 
 ## 📌 Executive Overview
  
-**MRIIQ** ([mriiq.fit](https://mriiq.fit)) is an enterprise-grade, full-stack Prior Authorization Intelligence platform designed for Lumbar Spine MRI request evaluation. It combines **agentic AI orchestration**, **the Model Context Protocol (MCP)**, **OpenAI `gpt-5.6-terra`**, **deterministic clinical decision rules**, and **human-in-the-loop (HITL) review**.
+**MRIIQ** ([mriiq.fit](https://mriiq.fit)) is an enterprise-grade, full-stack Prior Authorization Intelligence platform designed for Lumbar Spine MRI evaluation. It coordinates **agentic AI orchestration**, **the Model Context Protocol (MCP)**, **OpenAI `gpt-5.6-terra`**, **deterministic clinical decision rules**, **SOAP-formatted physician documentation**, **grounded clinical RAG**, and **human-in-the-loop (HITL) review**.
 
 The core design principle is:
 > **The LLM never makes the authorization decision.**  
-> OpenAI `gpt-5.6-terra` is used strictly for natural-language clinical fact extraction. A deterministic, auditable Python rule engine evaluates criteria, and a licensed human reviewer makes the final determination.
+> OpenAI `gpt-5.6-terra` is used strictly for natural-language clinical fact extraction and grounded RAG document queries. A deterministic, auditable Python rule engine evaluates medical necessity criteria, and a licensed human reviewer makes the final determination.
 
 ---
 
@@ -21,360 +21,238 @@ The core design principle is:
 | **Frontend** | [Next.js](https://nextjs.org/) 16 (App Router, Turbopack), [React](https://react.dev/) 19, TypeScript, Vanilla CSS Design System |
 | **Backend API** | [Python](https://www.python.org/) 3.14, [FastAPI](https://fastapi.tiangolo.com/), Uvicorn, Pydantic v2 |
 | **Agentic AI Orchestrator** | [LangGraph](https://langchain-ai.github.io/langgraph/) StateGraph with `MemorySaver` checkpointer & `interrupt_before` |
-| **AI Provider** | **OpenAI exclusively** — Model: `gpt-5.6-terra`, Structured Outputs via `max_completion_tokens`, TTS: `tts-1-hd` / `onyx` |
+| **AI Provider** | **OpenAI exclusively** — Extraction & RAG: `gpt-5.6-terra`, Structured Outputs via `max_completion_tokens`, TTS: `tts-1-hd` / `onyx` |
 | **Tool Protocol** | **Model Context Protocol (MCP)** Python SDK v2.x (`mcp`), FastMCP Server |
-| **Cloud & Data** | **Firebase** JS SDK v12.19 (Analytics, Auth, Firestore Configuration) |
-| **Document Generation** | [ReportLab](https://www.reportlab.com/) synthetic clinical PDF generator |
+| **Speech Engine** | **Universal TTS Engine** — OpenAI `tts-1-hd` with automatic seamless Web Speech API (`window.speechSynthesis`) fallback |
+| **Cloud & Hosting** | **Firebase App Hosting** (`quantiq221` / `mriiq` / `us-east4`), Google Cloud, custom domain `mriiq.fit` |
+| **Document Generation** | [ReportLab](https://www.reportlab.com/) synthetic clinical PDF generator (Formal SOAP Notes format) |
 
 ---
 
-## 🧠 Architectural & Authorization Workflow
+## 🧠 LangGraph StateGraph Architecture
+
+All LangGraph workflows, state definitions, nodes, edges, and agentic integrations are written in **pure Python** under [`backend/app/graph/`](backend/app/graph/).
+
+```mermaid
+flowchart TD
+    START([START]) --> fetch_patient["Node 1: fetch_patient\n(MCP Tool Agent)"]
+    fetch_patient --> extract["Node 2: extract\n(Clinical Reader Agent gpt-5.6-terra)"]
+    extract --> decide["Node 3: decide\n(Policy Decision Engine)"]
+    decide --> rag_assistant["Node 4: rag_assistant\n(SOAP Clinical RAG Agent)"]
+    rag_assistant --> PAUSE{{"⏸ interrupt_before\n(HITL Checkpoint MemorySaver)"}}
+    
+    PAUSE -.->|Reviewer Decision Submitted| apply_review["Node 5: apply_review\n(Audit Finalization)"]
+    apply_review --> END_NODE([END])
+
+    classDef hitl fill:#1e293b,stroke:#f59e0b,stroke-width:2px;
+    class PAUSE hitl;
+```
+
+### 1. LangGraph State (`AuthState`) in Python
+Located in [`backend/app/graph/state.py`](backend/app/graph/state.py):
+
+```python
+class AuthState(BaseModel):
+    """Shared mutable state threaded through every LangGraph node."""
+    # ── Workflow Inputs ──
+    patient_id: str = ""             # "P001", "P002", "P003"
+    clinical_note: str = ""          # Raw physician clinical narrative
+
+    # ── MCP Tool Data ──
+    patient: dict = {}               # Plan status & member details from MCP
+    rule: dict = {}                  # Payer policy rules (min 6w pain, min 6w physio)
+
+    # ── OpenAI Fact Extraction (gpt-5.6-terra) ──
+    pain_weeks: Optional[float] = None     # Extracted pain duration
+    physio_weeks: Optional[float] = None   # Extracted supervised physio weeks
+    extraction_raw: str = ""               # Serialized Pydantic extraction model
+
+    # ── Deterministic Authorization Decision ──
+    recommendation: str = ""         # "APPROVE" | "DENY"
+    denial_reasons: list[str] = []   # Missing criteria checklist
+
+    # ── Agentic Clinical RAG Q&A (SOAP Notes) ──
+    rag_query: Optional[str] = None
+    rag_answer: Optional[str] = None
+    rag_cited_section: Optional[str] = None  # "Subjective" | "Objective" | "Assessment" | "Plan"
+    rag_evidence: List[str] = []
+
+    # ── Human-in-the-Loop Review (HITL) ──
+    human_decision: str = ""         # "approved" | "rejected"
+    final_outcome: str = ""          # Audit trial recorded outcome
+
+    # ── System Errors ──
+    error: str = ""
+```
+
+### 2. LangGraph Nodes & Edges in Python
+Located in [`backend/app/graph/workflow.py`](backend/app/graph/workflow.py) and [`backend/app/graph/nodes.py`](backend/app/graph/nodes.py):
+
+| Node | Python Function | Role | Transitions To |
+|---|---|---|---|
+| **`fetch_patient`** | `node_fetch_patient` | Invokes the MCP Tool Agent to retrieve active coverage eligibility and clinical guideline rules. | `extract` |
+| **`extract`** | `node_extract` | Invokes the Clinical Reader Agent (`gpt-5.6-terra`) with strict prompts to extract numerical durations without inference. | `decide` |
+| **`decide`** | `node_decide` | Executes deterministic medical criteria validation (`plan_active`, `pain_weeks >= 6`, `physio_weeks >= 6`). | `rag_assistant` |
+| **`rag_assistant`** | `node_rag_assistant` | Grounded clinical RAG agent answering queries over the patient's SOAP documentation. | `apply_review` |
+| ⏸ **INTERRUPT** | `interrupt_before=["apply_review"]` | Halts execution. State snapshot is saved in `MemorySaver` keyed by `thread_id`. Frontend renders review card. | — |
+| **`apply_review`** | `node_apply_review` | Resumes from checkpoint with human reviewer's confirmation or override, producing the final recorded audit trail. | `END` |
+
+---
+
+## 🤖 The Suite of Agentic AI Agents in Python
+
+All AI agents are implemented in Python in [`backend/app/agents/`](backend/app/agents/):
 
 ```text
-               ┌────────────────────────────────────────────────────────┐
-               │              Next.js Frontend (MRIIQ UI)                │
-               │   • Patient ID / Quick Preset Selector (P001, P002...) │
-               │   • Clinical Note Editor & Synthetic PDF Previewer     │
-               └───────────────────────────┬────────────────────────────┘
-                                           │ POST /api/authorize
-                                           ▼
-               ┌────────────────────────────────────────────────────────┐
-               │                   FastAPI Backend                      │
-               └───────────────────────────┬────────────────────────────┘
-                                           │
-                                           ▼
-               ┌────────────────────────────────────────────────────────┐
-               │          LangGraph StateGraph Execution                │
-               │                                                        │
-               │  [Node 1: fetch_patient]                               │
-               │     ├── Query MCP Server via Official MCP SDK          │
-               │     └── get_patient(id) + get_rule()                   │
-               │                                                        │
-               │  [Node 2: extract]                                     │
-               │     ├── OpenAI gpt-5.6-terra Structured Fact Extraction│
-               │     └── Extracts: pain_weeks, physio_weeks             │
-               │                                                        │
-               │  [Node 3: decide]                                      │
-               │     ├── Deterministic Python Rule Engine               │
-               │     └── Evaluates: Plan Active? Pain ≥ 6w? Physio ≥ 6w?│
-               │                                                        │
-               │  [LangGraph Checkpoint Interruption]                   │
-               │     └── State suspended in MemorySaver checkpointer    │
-               └───────────────────────────┬────────────────────────────┘
-                                           │ Returns recommendation + reasons
-                                           ▼
-               ┌────────────────────────────────────────────────────────┐
-               │             Human Reviewer Interface                   │
-               │   • Recommendation Card (APPROVE / DENY)               │
-               │   • Accessibility Audio via OpenAI TTS (tts-1-hd/onyx) │
-               │   • Reviewer Actions: [Approve Decision] [Reject]     │
-               └───────────────────────────┬────────────────────────────┘
-                                           │ POST /api/review
-                                           ▼
-               ┌────────────────────────────────────────────────────────┐
-               │               LangGraph State Resumed                  │
-               │                                                        │
-               │  [Node 4: apply_review]                                │
-               │     └── Applies human decision → Produces Final Outcome│
-               └────────────────────────────────────────────────────────┘
+backend/app/agents/
+├── reader.py     # Clinical Reader Agent (gpt-5.6-terra fact extraction)
+├── decision.py   # Deterministic Decision Agent (evidence-based criteria engine)
+├── rag.py        # Clinical RAG Agent (SOAP EHR Q&A with section citations)
+├── vision.py     # Multimodal Vision Agent (chart scan & document analysis)
+└── tts.py        # Voice Briefing Agent (OpenAI tts-1-hd, onyx)
 ```
 
----
+### 1. Clinical Reader Agent ([reader.py](backend/app/agents/reader.py))
+- Uses **OpenAI `gpt-5.6-terra`** with modern `max_completion_tokens` parameter.
+- Enforces strict zero-hallucination rules:
+  - Extracts only explicitly written durations in weeks.
+  - "No physiotherapy was tried" ➔ `physio_weeks = 0`.
+  - Physiotherapy mentioned without duration ➔ `physio_weeks = null`.
+  - Absent mention ➔ `physio_weeks = null`.
 
-## 📋 Deterministic Clinical Authorization Rules
+### 2. Deterministic Decision Agent ([decision.py](backend/app/agents/decision.py))
+- Evaluates clinical necessity criteria:
+  1. Is the insurance policy active? (`plan_active == True`)
+  2. Has pain persisted for at least 6 weeks? (`pain_weeks >= 6`)
+  3. Has a supervised physical therapy trial been completed for at least 6 weeks? (`physio_weeks >= 6`)
+- Output: `APPROVE` or `DENY` with precise itemized denial justifications.
 
-To qualify for Lumbar Spine MRI prior authorization under clinical guideline policies:
+### 3. Clinical RAG Agent ([rag.py](backend/app/agents/rag.py))
+- Ingests synthetic physician documentation in full **SOAP (Subjective, Objective, Assessment, Plan)** format.
+- Queries `gpt-5.6-terra` with prompt constraints forcing answers to cite specific SOAP sections (`[Subjective]`, `[Objective]`, `[Assessment]`, `[Plan]`).
+- Includes a built-in deterministic clinical semantic retrieval engine as a resilient fallback if an API key is missing or network fails.
 
-1. **Active Coverage Plan**: Patient's health insurance plan must be active (`plan_active == True`).
-2. **Conservative Therapy / Pain Duration**: Symptoms must have persisted for at least **6 weeks** (`pain_weeks >= 6`).
-3. **Supervised Physical Therapy Trial**: Patient must have attempted at least **6 weeks** of conservative physical therapy (`physio_weeks >= 6`).
+### 4. Multimodal Vision Agent ([vision.py](backend/app/agents/vision.py))
+- Employs `gpt-5.6-terra` vision capabilities to parse clinical charts, handwritten notes, and scanned documents.
 
-### Synthetic Benchmark Test Cases
+### 5. TTS Voice Briefing Agent ([tts.py](backend/app/agents/tts.py))
+- Synthesizes MP3 voice briefs of prior authorization verdicts via OpenAI `tts-1-hd` using the `onyx` voice.
 
-| Patient ID | Synthetic Name | Plan Status | Pain Duration | Physiotherapy Trial | Rule Engine Output |
-|---|---|---|---|---|---|
-| **`P001`** | Alex Morgan | Active | 10 weeks | 8 weeks | **APPROVE** (All criteria met) |
-| **`P002`** | Jordan Lee | Active | 9 weeks | 0 weeks (None) | **DENY** (Requires ≥ 6 weeks physio) |
-| **`P003`** | Casey Kim | **Inactive** | 12 weeks | 0 weeks (None) | **DENY** (Inactive coverage & no physio) |
-
----
-
-## 🤖 OpenAI Platform Integration
-
-The application exclusively targets OpenAI:
-- **Primary AI Model**: `gpt-5.6-terra`
-  - Configurable via `OPENAI_MODEL=gpt-5.6-terra` in `.env`
-  - Used with Pydantic structured output models and modern `max_completion_tokens` parameter.
-- **Text-to-Speech (TTS)**:
-  - Model: `tts-1-hd`
-  - Voice: `onyx`
-  - Accessible via the `/api/tts` endpoint to provide auditory playback of clinical recommendations and denial justifications.
-- **Vision**:
-  - Module `backend/app/agents/vision.py` for synthetic clinical note and scan interpretation.
+### 6. MCP Client & Tool Agent ([backend/app/mcp/client.py](backend/app/mcp/client.py))
+- Connects to the FastMCP server ([mcp_server/server.py](mcp_server/server.py)) implementing the Model Context Protocol to query patient records (`get_patient`) and policy thresholds (`get_rule`).
 
 ---
 
-## 🔥 Firebase Configuration
+## 📋 SOAP Notes Clinical Documentation & Grounded RAG
 
-Firebase is installed and configured in the frontend application via [frontend/src/lib/firebase.ts](file:///d:/chancellor/MRIIQ/frontend/src/lib/firebase.ts).
+All synthetic patient cases (**P001**, **P002**, **P003**) are modeled in the medical industry standard **SOAP (Subjective, Objective, Assessment, Plan)** format:
 
-Environment variables template (placeholders):
-```env
-NEXT_PUBLIC_FIREBASE_API_KEY="your-firebase-api-key"
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="your-project-id.firebaseapp.com"
-NEXT_PUBLIC_FIREBASE_PROJECT_ID="your-project-id"
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="your-project-id.firebasestorage.app"
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="your-messaging-sender-id"
-NEXT_PUBLIC_FIREBASE_APP_ID="your-app-id"
-NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID="your-measurement-id"
-```
+- **`[S] Subjective`**: Chief complaint, history of present illness (HPI), pain duration in weeks, VAS pain rating (1–10), and functional impact on activities of daily living.
+- **`[O] Objective`**: Vitals, physical examination (gait, lumbar ROM), neurological examination (motor, dermatomes, reflexes), Straight Leg Raise (SLR) test, and supervised physical therapy duration.
+- **`[A] Assessment`**: Diagnoses with ICD-10 codes, medical necessity criteria checklist (Active Plan, Pain ≥ 6w, Physio ≥ 6w), and prior authorization determination (`APPROVE` or `DENY`).
+- **`[P] Plan`**: Requested procedure (`CPT 72148` Lumbar Spine MRI without contrast), clinical orders, pharmacotherapy, and follow-up plan.
 
-The Firebase initialization module handles Next.js Server-Side Rendering (SSR) safely, initializing `getAnalytics()` conditionally only when running in the browser.
+### Official Generated SOAP PDFs
+Professional clinical PDFs are generated using ReportLab and downloadable directly from the app:
+- [`public/mock-pdfs/P001.pdf`](public/mock-pdfs/P001.pdf) — *Alex Morgan (Approved: 10w pain, 8w physio, active plan)*
+- [`public/mock-pdfs/P002.pdf`](public/mock-pdfs/P002.pdf) — *Jordan Lee (Denied: 9w pain, 0w physio)*
+- [`public/mock-pdfs/P003.pdf`](public/mock-pdfs/P003.pdf) — *Casey Kim (Denied: 12w pain, 0w physio, inactive coverage)*
 
 ---
 
-## 📂 Repository File Structure
+## 🔊 Universal Speech Engine (Zero 503 Errors)
 
-```text
-MRIIQ/
-├── backend/
-│   ├── app/
-│   │   ├── agents/
-│   │   │   ├── decision.py       # Deterministic Python rule engine (APPROVE / DENY)
-│   │   │   ├── reader.py         # gpt-5.6-terra structured fact extraction
-│   │   │   ├── tts.py            # OpenAI TTS synthesis (tts-1-hd, onyx)
-│   │   │   └── vision.py         # OpenAI Vision synthetic document reader
-│   │   ├── graph/
-│   │   │   ├── nodes.py          # LangGraph execution nodes
-│   │   │   ├── state.py          # AuthState Pydantic / TypedDict schema
-│   │   │   └── workflow.py       # StateGraph with MemorySaver & interrupt_before
-│   │   ├── mcp/
-│   │   │   └── client.py         # MCP client integrating FastMCP server
-│   │   ├── models/
-│   │   │   └── extraction.py     # Request/Response & Pydantic extraction models
-│   │   ├── config.py             # Pydantic settings & env resolution
-│   │   └── main.py               # FastAPI application, CORS, static routes, REST endpoints
-│   └── requirements.txt          # Python dependencies
-├── data/
-│   ├── mock-pdfs/                # Generated synthetic clinical PDF files
-│   │   ├── P001.pdf
-│   │   ├── P002.pdf
-│   │   └── P003.pdf
-│   ├── patients.json             # Synthetic patient registry
-│   ├── rule.json                 # Clinical guideline thresholds
-│   ├── P001.txt / P002.txt...    # Synthetic clinical note text files
-│   └── generate_mock_pdfs.py     # ReportLab script for generating PDFs
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── globals.css       # Complete dark-mode glassmorphism design system
-│   │   │   ├── layout.tsx        # HTML root layout, Inter + JetBrains Mono fonts, SEO
-│   │   │   └── page.tsx          # Main MRIIQ prior authorization interactive view
-│   │   ├── components/
-│   │   │   ├── ClinicalNote.tsx          # Note editor textarea
-│   │   │   ├── FinalOutcome.tsx          # Post-review outcome banner
-│   │   │   ├── HumanReview.tsx           # Approve / Reject interactive reviewer actions
-│   │   │   ├── MockPdfViewer.tsx         # Embedded synthetic document PDF viewer
-│   │   │   ├── PatientInput.tsx          # Patient ID selector
-│   │   │   ├── RecommendationCard.tsx    # Fact extraction & rule breakdown card
-│   │   │   └── TTSPlayer.tsx             # Audio TTS recommendation player
-│   │   └── lib/
-│   │       ├── api.ts            # Typed client for FastAPI REST endpoints
-│   │       └── firebase.ts       # Firebase v12 SDK initialization
-│   ├── .env                      # Frontend environment file
-│   ├── .env.local                # Frontend local environment file
-│   ├── package.json              # Node dependencies (Next.js 16, React 19, Firebase 12)
-│   └── tsconfig.json             # TypeScript configuration with @/* alias
-├── mcp_server/
-│   └── server.py                 # FastMCP Python server (get_patient, get_rule)
-├── .env                          # Root environment file (OpenAI + Firebase + API URLs)
-├── .env.example                  # Environment template
-├── .env.local                    # Root local environment file
-├── test.py                       # Automated test suite (P001, P002, P003 + Rejection)
-└── README.md                     # Comprehensive project documentation
-```
+To eliminate runtime audio failures (such as `503 Service Unavailable` when server keys are not configured in cloud containers), the frontend implements a **Universal Speech Engine** ([src/lib/speech.ts](src/lib/speech.ts)):
+
+1. **Server Attempt**: First calls `/api/tts` with the clinical script to request high-fidelity OpenAI `tts-1-hd` (`onyx`) audio.
+2. **Resilient Fallback**: If the server returns 503 or fails, the engine seamlessly and transparently falls back to the browser's native **Web Speech API (`window.speechSynthesis`)**.
+3. **Audio Controls Everywhere**:
+   - **Clinical Notes Area**: "🔊 Listen to Note" / "⏹ Stop" button in [ClinicalNote.tsx](src/components/ClinicalNote.tsx).
+   - **Clinical Summary Area**: "🔊 Listen to Summary" / "⏹ Stop" button in [RecommendationCard.tsx](src/components/RecommendationCard.tsx).
+   - **RAG Answers**: "🔊 Listen" / "⏹ Stop" button on every RAG query response in [SOAPRagChat.tsx](src/components/SOAPRagChat.tsx).
+
+---
+
+## 📋 Benchmark Synthetic Test Cases
+
+| Patient ID | Name | Insurance Plan | Pain Duration | Supervised Physio | Determination | Rationale |
+|---|---|---|---|---|---|---|
+| **`P001`** | Alex Morgan | Horizon Blue Cross (Active) | 10 weeks | 8 weeks | **APPROVE** | All medical necessity criteria satisfied. |
+| **`P002`** | Jordan Lee | Aetna Choice POS (Active) | 9 weeks | 0 weeks | **DENY** | Failed prerequisite 6-week physiotherapy trial. |
+| **`P003`** | Casey Kim | UnitedHealthcare (Terminated) | 12 weeks | 0 weeks | **DENY** | Inactive coverage policy & no physiotherapy trial. |
+
+---
+
+## 🌐 Custom Domain & Deployment ([mriiq.fit](https://mriiq.fit))
+
+MRIIQ is live on **Firebase App Hosting** in Google Cloud region `us-east4`:
+
+| Domain | Destination |
+|---|---|
+| **`https://mriiq.fit`** | Production Web Application |
+| **`https://www.mriiq.fit`** | Canonical Redirect |
+| **`https://mriiq--quantiq221.us-east4.hosted.app`** | Firebase App Hosting Backend |
+| **`https://api.mriiq.fit`** | Backend API (or relative `/api/*`) |
+
+### Automated Rollouts:
+Firebase App Hosting monitors the GitHub repository [`iChancetek/MRIIQ`](https://github.com/iChancetek/MRIIQ). Pushing to the `main` branch triggers automated container builds and zero-downtime rollouts.
 
 ---
 
 ## 🚀 Quick Start Guide
 
-### Prerequisites
-- Python 3.11+ (Python 3.14 supported)
-- Node.js 18+ and npm
-- Valid OpenAI API Key (with access to `gpt-5.6-terra`)
-
----
-
 ### Step 1: Clone & Configure Environment
-
 ```bash
-# Configure .env with your API keys:
+git clone https://github.com/iChancetek/MRIIQ.git
+cd MRIIQ
+
+# Configure .env:
 OPENAI_API_KEY="your-openai-api-key"
 OPENAI_MODEL=gpt-5.6-terra
 OPENAI_TTS_MODEL=tts-1-hd
 OPENAI_TTS_VOICE=onyx
-BACKEND_URL=http://localhost:8000
-NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
----
-
-### Step 2: Set Up & Test the Backend
-
+### Step 2: Run Python Automated Tests
 ```bash
-# 1. Install backend requirements
 python -m pip install -r backend/requirements.txt
-
-# 2. Run the automated test suite
 python test.py
 ```
 
-#### Expected Test Output:
+Expected output:
 ```text
 P001: PASS  ->  Decision approved by reviewer - Recommendation: APPROVE
 P002: PASS  ->  Decision approved by reviewer - Recommendation: DENY
 P003: PASS  ->  Decision approved by reviewer - Recommendation: DENY
 P001-REJECT: PASS  ->  Decision rejected by reviewer
 
+--- Testing Python RAG Agent (SOAP Notes) ---
+RAG [P001] 'What are the straight leg raise findings?' -> [Objective]: PASS
+RAG [P001] 'Did the patient complete physiotherapy?' -> [Objective]: PASS
+RAG [P002] 'How many weeks of physical therapy was attempted?' -> [Objective]: PASS
+RAG [P003] 'What is the health insurance coverage status?' -> [Assessment]: PASS
+
 All tests PASSED.
 ```
 
----
-
-### Step 3: Launch the FastAPI Backend Service
-
+### Step 3: Launch Local Servers
 ```bash
+# Terminal 1: FastAPI Backend
 uvicorn backend.app.main:app --reload --port 8000
-```
-- Interactive API Docs (Swagger): [http://localhost:8000/docs](http://localhost:8000/docs)
-- Health Check: [http://localhost:8000/health](http://localhost:8000/health)
-- Static Synthetic PDFs: [http://localhost:8000/mock-pdfs/P001.pdf](http://localhost:8000/mock-pdfs/P001.pdf)
 
----
-
-### Step 4: Set Up & Launch the Next.js Frontend
-
-In a separate terminal:
-```bash
+# Terminal 2: Next.js Frontend
 cd frontend
 npm install
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) in your browser.
+Navigate to [http://localhost:3000](http://localhost:3000) or [http://mriiq.fit:3000](http://mriiq.fit:3000).
 
 ---
 
-## 🌐 Accessing the Application via MRIIQ.fit
+## 🔒 Security & Compliance Safeguards
 
-The platform is designed to be accessible via the custom domain **[mriiq.fit](https://mriiq.fit)**.
-
-### 1. Production Access
-- **Web Application**: [https://mriiq.fit](https://mriiq.fit) (or [https://www.mriiq.fit](https://www.mriiq.fit))
-- **Backend API**: [https://api.mriiq.fit](https://api.mriiq.fit)
-- **API Health Check**: `https://api.mriiq.fit/health`
-- **Swagger Documentation**: `https://api.mriiq.fit/docs`
-
----
-
-### 2. Local Development Access via `mriiq.fit`
-You can test the application locally under the custom domain `http://mriiq.fit:3000` by mapping it in your computer's local DNS hosts file:
-
-#### On Windows:
-1. Open PowerShell or Command Prompt as **Administrator**.
-2. Open the hosts file:
-   ```powershell
-   notepad C:\Windows\System32\drivers\etc\hosts
-   ```
-3. Add the following lines to the bottom of the file:
-   ```text
-   127.0.0.1 mriiq.fit
-   127.0.0.1 www.mriiq.fit
-   127.0.0.1 api.mriiq.fit
-   ```
-4. Save and close the file.
-
-#### On macOS / Linux:
-1. Run in terminal:
-   ```bash
-   sudo nano /etc/hosts
-   ```
-2. Add:
-   ```text
-   127.0.0.1 mriiq.fit
-   127.0.0.1 www.mriiq.fit
-   127.0.0.1 api.mriiq.fit
-   ```
-3. Save (`Ctrl+O`, `Enter`) and exit (`Ctrl+X`).
-
-#### Launch & Access:
-Start the backend and frontend servers as usual, then navigate directly to:
-👉 **[http://mriiq.fit:3000](http://mriiq.fit:3000)**
-
----
-
-### 3. Firebase App Hosting Configuration (Backend: `mriiq`)
-
-The frontend is deployed on **Firebase App Hosting** in Google Cloud region `us-east4`:
-
-| Setting | Value |
-|---|---|
-| **Project** | `quantiq221` (QuantIQ) |
-| **Backend Name** | `mriiq` |
-| **Region** | `us-east4` |
-| **Primary Domain** | [https://mriiq.fit](https://mriiq.fit) |
-| **Default App Hosting Domain** | [https://mriiq--quantiq221.us-east4.hosted.app](https://mriiq--quantiq221.us-east4.hosted.app) |
-
-#### Quick Links:
-- 📊 [App Hosting Overview](https://console.firebase.google.com/u/0/project/quantiq221/apphosting/backends/mriiq/locations/us-east4/overview)
-- 🚀 [Rollouts & Deployment History](https://console.firebase.google.com/u/0/project/quantiq221/apphosting/backends/mriiq/locations/us-east4/rollouts)
-- 📝 [Build & Runtime Logs](https://console.firebase.google.com/u/0/project/quantiq221/apphosting/backends/mriiq/locations/us-east4/overview#)
-
-#### CI/CD & Automated Rollouts:
-Firebase App Hosting is connected to the GitHub repository [`iChancetek/MRIIQ`](https://github.com/iChancetek/MRIIQ).  
-Every `git push origin main` automatically triggers a zero-downtime rollout building the Next.js production bundle.
-
-#### `apphosting.yaml` Configuration:
-The project includes `apphosting.yaml` (in both repo root and `frontend/`) defining runtime resources and environment variables:
-```yaml
-runConfig:
-  minInstances: 0
-  maxInstances: 2
-  concurrency: 80
-  cpu: 1
-  memoryMiB: 512
-```
-
-#### CORS Support:
-The FastAPI backend (`backend/app/main.py`) allows requests from both domains:
-```python
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-    "http://mriiq.fit:3000",
-    "https://mriiq.fit",
-    "https://www.mriiq.fit",
-    "https://mriiq--quantiq221.us-east4.hosted.app",
-    "https://api.mriiq.fit",
-]
-```
-
----
-
-## 🖥 Frontend Features & UI Capabilities
-
-- **Quick Presets**: Single-click testing buttons for **P001**, **P002**, and **P003**.
-- **Embedded Document Preview**: Live preview of the synthetic clinical chart PDF directly in the review screen.
-- **Fact Extraction Cards**: Real-time display of conservative therapy duration (`pain_weeks`), physical therapy history (`physio_weeks`), and coverage status with visual status pills.
-- **OpenAI TTS Accessibility Audio**: One-click voice readback of the authorization decision and denial reasons via `tts-1-hd` (`onyx`).
-- **Human Review Decision Actions**: Actionable buttons allowing reviewers to approve the recommendation or record a human override.
-- **Modern Aesthetic**: Fully responsive layout featuring glassmorphism cards, CSS micro-animations, vibrant status indicators, and custom Google Fonts typography.
-
----
-
-## 🔒 Security & Privacy Practices
-
-1. **No PHI**: The platform operates entirely on synthetic data.
-2. **Server-Side API Keys**: `OPENAI_API_KEY` is only accessed on the FastAPI server backend. It is never sent to or exposed in client bundles.
-3. **Stateless Resumption**: LangGraph threads maintain deterministic state without exposing sensitive internal memory to public endpoints.
-4. **Git Protection**: Secret files (`.env`, `.env.local`, service accounts) are ignored in `.gitignore`.
+1. **Zero PHI**: Strictly operates on synthetic, non-identifiable benchmark data.
+2. **Server-Side API Key Protection**: `OPENAI_API_KEY` is exclusively handled in server-side runtimes and never packaged in client bundles.
+3. **Deterministic Authority**: AI extractions are strictly evaluated against rigid medical criteria; no generative model can issue an unvalidated authorization approval.
+4. **Human Oversight (HITL)**: Prior authorization decisions require human clinical reviewer approval with full immutable audit logging.

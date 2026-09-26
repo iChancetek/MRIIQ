@@ -11,10 +11,12 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.models.extraction import (
-    AuthRequest, ReviewRequest, AuthResponse, FinalOutcomeResponse
+    AuthRequest, ReviewRequest, AuthResponse, FinalOutcomeResponse,
+    RagRequest, RagResponse,
 )
-from backend.app.graph.workflow import workflow_graph
+from backend.app.graph.workflow import workflow_graph, rag_graph
 from backend.app.agents.tts import speak_recommendation
+from backend.app.agents.rag import query_clinical_rag
 
 app = FastAPI(
     title="MRI Prior Authorization API",
@@ -109,6 +111,15 @@ def text_to_speech(recommendation: str, denial_reasons: list[str] = None):
     denial_reasons = denial_reasons or []
     audio_bytes = speak_recommendation(recommendation, denial_reasons)
     return Response(content=audio_bytes, media_type="audio/mpeg")
+
+
+@app.post("/api/rag", response_model=RagResponse)
+def rag_endpoint(req: RagRequest):
+    """
+    RAG endpoint querying SOAP clinical documentation in Python.
+    Grounded in synthetic EHR records for P001, P002, and P003.
+    """
+    return query_clinical_rag(req.patient_id, req.question)
 
 
 if __name__ == "__main__":

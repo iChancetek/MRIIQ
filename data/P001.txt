@@ -1,11 +1,78 @@
 SYNTHETIC DATA — NOT A REAL PATIENT
-FOR DEMONSTRATION ONLY
+FOR DEMONSTRATION AND TESTING ONLY
 
+================================================================================
+PHYSICIAN CLINICAL DOCUMENTATION (SOAP FORMAT)
+================================================================================
 Patient ID: P001
-Name: Alex Morgan
-Plan Status: Active
+Patient Name: Alex Morgan
+DOB: 04/12/1982 (Age 44) | Gender: Female
+Insurance Plan: Horizon Blue Cross PPO (Status: ACTIVE)
+Date of Service: September 24, 2026
+Attending Provider: Dr. Sarah Vance, MD (Spine & Pain Medicine, NPI: 1982736451)
+Facility: Metro Spine & Musculoskeletal Institute, Suite 400
 
-Clinical Note:
-Patient presents with chronic lower back pain for 10 weeks.
-Completed conservative physiotherapy for 8 weeks with persistent symptoms.
-Ordering physician requests Lumbar Spine MRI without contrast.
+--------------------------------------------------------------------------------
+[S] SUBJECTIVE
+--------------------------------------------------------------------------------
+Chief Complaint:
+Severe progressive lower back pain with right L5 dermatomal radiation for 10 weeks.
+
+History of Present Illness (HPI):
+Patient is a 44-year-old presenting with 10 weeks of unremitting lower back pain
+following lifting an object. Pain radiates into right posterior gluteal region,
+lateral calf, and dorsum of foot (VAS 7/10). Exacerbated by sitting and forward
+flexion; partially alleviated by recumbency. Denies bowel or bladder dysfunction,
+saddle numbness, or fevers.
+- Pain Duration: 10 weeks
+- Pain Severity (VAS): 7/10
+- Functional Impact: Ambulation and daily activities significantly impaired.
+
+--------------------------------------------------------------------------------
+[O] OBJECTIVE
+--------------------------------------------------------------------------------
+Vitals: BP 124/78 mmHg, HR 72 bpm, Temp 98.4°F, BMI 24.2.
+Physical Examination:
+Antalgic gait favoring right side. Marked tenderness over L4-L5 and L5-S1 spinous
+interspaces with moderate right paraspinal spasm. Lumbar flexion limited to 40°,
+extension 10°.
+Neurological Examination:
+Motor 5/5 bilaterally except right extensor hallucis longus (EHL) 4+/5.
+Hypoesthesia over right L5 dermatome. DTRs: Patellar 2+ bilateral; Achilles 1+
+on right, 2+ on left.
+Straight Leg Raise (SLR):
+Positive on right at 45°; negative on left.
+Conservative Therapy History:
+Completed 8 weeks of supervised physical therapy at Apex Physical Therapy
+(2x/week, Aug 1 - Sep 24, 2026) including core stabilization, McKenzie extension,
+and pelvic traction. Minimal functional improvement noted. (Physio weeks: 8).
+
+--------------------------------------------------------------------------------
+[A] ASSESSMENT
+--------------------------------------------------------------------------------
+Diagnoses:
+1. Lumbosacral radiculopathy, right L5-S1 distribution (ICD-10 M54.16)
+2. Intractable lumbar intervertebral disc disorder with radiculopathy (ICD-10 M51.16)
+3. Lumbago with sciatica, right side (ICD-10 M54.41)
+
+Prior Authorization Criteria Evaluation:
+- Active Health Plan Coverage: YES (Active)
+- Documented Pain Duration ≥ 6 Weeks: YES (10 weeks)
+- Completed Supervised Physiotherapy Trial ≥ 6 Weeks: YES (8 weeks completed)
+Recommendation: APPROVE
+Denial Reasons: None. All clinical necessity guidelines satisfied.
+
+--------------------------------------------------------------------------------
+[P] PLAN
+--------------------------------------------------------------------------------
+Requested Procedure:
+Lumbar Spine MRI without contrast (CPT 72148).
+Clinical Orders:
+1. Prior Authorization requested for Lumbar Spine MRI without contrast (CPT 72148).
+2. Evaluate for disc herniation and nerve root impingement.
+Medications:
+- Continue Meloxicam 15mg daily
+- Start Gabapentin 300mg TID for neuropathic pain control
+Follow-up:
+Return to clinic immediately following MRI completion for surgical/interventional
+spine consultation.
