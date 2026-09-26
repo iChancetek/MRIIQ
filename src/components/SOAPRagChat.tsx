@@ -32,16 +32,18 @@ export default function SOAPRagChat({
   const [isQuerying, setIsQuerying] = useState(false);
   const [isPlayingId, setIsPlayingId] = useState<string | null>(null);
 
+  const normalizedId = (activePatientId || "P001").trim().toUpperCase();
   const patient: SoapPatientRecord =
-    SOAP_PATIENTS[activePatientId] || SOAP_PATIENTS["P001"];
+    SOAP_PATIENTS[normalizedId] || SOAP_PATIENTS["P001"];
 
   // Blank by default per user specification
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
   // Sync prop changes without injecting unsolicited briefings
   useEffect(() => {
-    if (selectedPatientId && selectedPatientId !== activePatientId) {
-      setActivePatientId(selectedPatientId);
+    const cleanProp = selectedPatientId ? selectedPatientId.trim().toUpperCase() : "";
+    if (cleanProp && cleanProp !== activePatientId.trim().toUpperCase()) {
+      setActivePatientId(cleanProp);
     }
   }, [selectedPatientId, activePatientId]);
 

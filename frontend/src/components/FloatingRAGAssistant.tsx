@@ -79,10 +79,11 @@ export default function FloatingRAGAssistant({
   // Long-Term Memory (Persistent per patient in localStorage)
   const [patientMemories, setPatientMemories] = useState<Record<string, string[]>>({});
 
-  // Active patient record
+  // Active patient record (normalized to uppercase for case-insensitive lookup)
+  const normalizedId = activePatientId ? activePatientId.trim().toUpperCase() : "";
   const patient: SoapPatientRecord | null =
-    activePatientId && SOAP_PATIENTS[activePatientId]
-      ? SOAP_PATIENTS[activePatientId]
+    normalizedId && SOAP_PATIENTS[normalizedId]
+      ? SOAP_PATIENTS[normalizedId]
       : null;
 
   // Traditional RAG chat messages thread
@@ -161,9 +162,9 @@ export default function FloatingRAGAssistant({
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
-  // Sync prop changes
+  // Sync prop changes (normalized)
   useEffect(() => {
-    setActivePatientId(selectedPatientId || "");
+    setActivePatientId(selectedPatientId ? selectedPatientId.trim().toUpperCase() : "");
   }, [selectedPatientId]);
 
   // Load persistent memories from localStorage

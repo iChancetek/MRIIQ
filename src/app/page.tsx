@@ -77,6 +77,38 @@ export default function Home() {
     }
   }
 
+  /* ── Intelligent Patient ID Handler ─────────────────────────────────── */
+  const handlePatientIdChange = (rawId: string) => {
+    const trimmed = rawId.trim();
+    let normalized = trimmed.toUpperCase();
+
+    // Map common shortcuts: "1" -> "P001", "2" -> "P002", "3" -> "P003"
+    if (normalized === "1" || normalized === "P1" || normalized === "001") normalized = "P001";
+    if (normalized === "2" || normalized === "P2" || normalized === "002") normalized = "P002";
+    if (normalized === "3" || normalized === "P3" || normalized === "003") normalized = "P003";
+
+    const matchedPreset = PRESET_CASES.find((p) => p.id === normalized);
+
+    if (matchedPreset) {
+      setPatientId(matchedPreset.id);
+      setClinicalNote((prevNote) => {
+        const isFromPreset = PRESET_CASES.some((p) => p.note === prevNote);
+        if (!prevNote.trim() || isFromPreset) {
+          return matchedPreset.note;
+        }
+        return prevNote;
+      });
+    } else {
+      setPatientId(rawId);
+      if (!trimmed) {
+        setClinicalNote((prevNote) => {
+          const isFromPreset = PRESET_CASES.some((p) => p.note === prevNote);
+          return isFromPreset ? "" : prevNote;
+        });
+      }
+    }
+  };
+
   /* ── Phase 2: Submit reviewer decision ──────────────────────────────── */
   async function handleReview(decision: string) {
     if (!authResult) return;
@@ -203,17 +235,14 @@ export default function Home() {
 
               <div className="preset-cards-grid">
                 {PRESET_CASES.map((preset) => {
-                  const isSelected = patientId === preset.id;
+                  const isSelected = patientId.trim().toUpperCase() === preset.id;
                   const isApprove = preset.verdict === "APPROVE";
                   return (
                     <button
                       key={preset.id}
                       type="button"
                       className={`preset-card-btn ${isSelected ? "active" : ""}`}
-                      onClick={() => {
-                        setPatientId(preset.id);
-                        setClinicalNote(preset.note);
-                      }}
+                      onClick={() => handlePatientIdChange(preset.id)}
                       id={`preset-${preset.id.toLowerCase()}`}
                     >
                       <div className="preset-top-row">
@@ -256,7 +285,11 @@ export default function Home() {
                 </div>
               </div>
 
-              <PatientInput value={patientId} onChange={setPatientId} />
+              <PatientInput
+                value={patientId}
+                onChange={handlePatientIdChange}
+                onSelectPatient={handlePatientIdChange}
+              />
               <ClinicalNote value={clinicalNote} onChange={setClinicalNote} />
 
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
@@ -278,7 +311,7 @@ export default function Home() {
             </div>
 
             {/* PDF preview when a patient ID is entered */}
-            {patientId.trim() && (
+            {patientId.trim().length >= 3 && (
               <div className="card animate-in" style={{ marginBottom: 28 }}>
                 <div className="card-header">
                   <div className="card-icon yellow">📄</div>
@@ -361,22 +394,11 @@ export default function Home() {
         )}
 
         {/* ── Interactive SOAP Clinical Documentation & RAG Q&A Assistant ────────────────────────────── */}
-        {patientId.trim() && (
+        {patientId.trim().length >= 3 && (
           <div className="animate-in">
             <SOAPRagChat
-              selectedPatientId={patientId.trim()}
-              onSelectPatient={(id) => {
-                setPatientId(id);
-                if (id === "P001") {
-                  setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
-                } else if (id === "P002") {
-                  setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
-                } else if (id === "P003") {
-                  setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
-                } else if (!id) {
-                  setClinicalNote("");
-                }
-              }}
+              selectedPatientId={patientId.trim().toUpperCase()}
+              onSelectPatient={handlePatientIdChange}
               onClear={() => {
                 setPatientId("");
                 setClinicalNote("");
@@ -393,19 +415,8 @@ export default function Home() {
 
       {/* ── Docked Bottom-Right Clinical RAG Assistant with Dual Memory ── */}
       <FloatingRAGAssistant
-        selectedPatientId={patientId}
-        onSelectPatient={(id) => {
-          setPatientId(id);
-          if (id === "P001") {
-            setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
-          } else if (id === "P002") {
-            setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
-          } else if (id === "P003") {
-            setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
-          } else if (!id) {
-            setClinicalNote("");
-          }
-        }}
+        selectedPatientId={patientId.trim().toUpperCase()}
+        onSelectPatient={handlePatientIdChange}
         onClear={() => {
           setPatientId("");
           setClinicalNote("");
