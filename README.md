@@ -5,8 +5,8 @@
 ---
 
 ## 📌 Executive Overview
-
-**MRIIQ** is an enterprise-grade, full-stack Prior Authorization Intelligence platform designed for Lumbar Spine MRI request evaluation. It combines **agentic AI orchestration**, **the Model Context Protocol (MCP)**, **OpenAI `gpt-5.6-terra`**, **deterministic clinical decision rules**, and **human-in-the-loop (HITL) review**.
+ 
+**MRIIQ** ([mriiq.fit](https://mriiq.fit)) is an enterprise-grade, full-stack Prior Authorization Intelligence platform designed for Lumbar Spine MRI request evaluation. It combines **agentic AI orchestration**, **the Model Context Protocol (MCP)**, **OpenAI `gpt-5.6-terra`**, **deterministic clinical decision rules**, and **human-in-the-loop (HITL) review**.
 
 The core design principle is:
 > **The LLM never makes the authorization decision.**  
@@ -262,6 +262,89 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 🌐 Accessing the Application via MRIIQ.fit
+
+The platform is designed to be accessible via the custom domain **[mriiq.fit](https://mriiq.fit)**.
+
+### 1. Production Access
+- **Web Application**: [https://mriiq.fit](https://mriiq.fit) (or [https://www.mriiq.fit](https://www.mriiq.fit))
+- **Backend API**: [https://api.mriiq.fit](https://api.mriiq.fit)
+- **API Health Check**: `https://api.mriiq.fit/health`
+- **Swagger Documentation**: `https://api.mriiq.fit/docs`
+
+---
+
+### 2. Local Development Access via `mriiq.fit`
+You can test the application locally under the custom domain `http://mriiq.fit:3000` by mapping it in your computer's local DNS hosts file:
+
+#### On Windows:
+1. Open PowerShell or Command Prompt as **Administrator**.
+2. Open the hosts file:
+   ```powershell
+   notepad C:\Windows\System32\drivers\etc\hosts
+   ```
+3. Add the following lines to the bottom of the file:
+   ```text
+   127.0.0.1 mriiq.fit
+   127.0.0.1 www.mriiq.fit
+   127.0.0.1 api.mriiq.fit
+   ```
+4. Save and close the file.
+
+#### On macOS / Linux:
+1. Run in terminal:
+   ```bash
+   sudo nano /etc/hosts
+   ```
+2. Add:
+   ```text
+   127.0.0.1 mriiq.fit
+   127.0.0.1 www.mriiq.fit
+   127.0.0.1 api.mriiq.fit
+   ```
+3. Save (`Ctrl+O`, `Enter`) and exit (`Ctrl+X`).
+
+#### Launch & Access:
+Start the backend and frontend servers as usual, then navigate directly to:
+👉 **[http://mriiq.fit:3000](http://mriiq.fit:3000)**
+
+---
+
+### 3. DNS & Production Deployment Configuration
+When deploying the application to production under `mriiq.fit`:
+
+1. **DNS Records (at your domain registrar or Cloudflare)**:
+   | Type | Name / Host | Value / Target | Description |
+   |---|---|---|---|
+   | **A** | `@` | `<Hosting IP>` (e.g. `76.76.21.21` for Vercel) | Points root domain `mriiq.fit` to frontend |
+   | **CNAME** | `www` | `cname.vercel-dns.com` (or provider CNAME) | Points `www.mriiq.fit` to frontend |
+   | **CNAME** | `api` | `<Backend Host>` (e.g. Railway, Render, Fly.io) | Points `api.mriiq.fit` to FastAPI backend |
+
+2. **Production Environment Variables**:
+   In your production deployment settings (Vercel / Cloudflare / Firebase):
+   ```env
+   NEXT_PUBLIC_API_URL=https://api.mriiq.fit
+   ```
+   In your backend production settings:
+   ```env
+   BACKEND_URL=https://api.mriiq.fit
+   ```
+
+3. **CORS Configuration**:
+   The FastAPI backend is pre-configured in `backend/app/main.py` with CORS support for all `mriiq.fit` subdomains and local ports:
+   ```python
+   origins = [
+       "http://localhost:3000",
+       "http://127.0.0.1:3000",
+       "http://mriiq.fit:3000",
+       "https://mriiq.fit",
+       "https://www.mriiq.fit",
+       "https://api.mriiq.fit",
+   ]
+   ```
 
 ---
 
