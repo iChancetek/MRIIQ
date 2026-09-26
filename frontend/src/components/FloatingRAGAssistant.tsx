@@ -515,13 +515,13 @@ export default function FloatingRAGAssistant({
             zIndex: 10000,
             display: "flex",
             flexDirection: "column",
-            background: "rgba(10, 14, 23, 0.98)",
+            background: "var(--bg-card)",
             backdropFilter: "blur(24px)",
-            border: isDragging ? "2px solid var(--accent)" : "1px solid rgba(56, 189, 248, 0.4)",
+            border: isDragging ? "2px solid var(--accent)" : "1px solid var(--border)",
             borderRadius: "18px",
             boxShadow: isDragging
-              ? "0 36px 90px rgba(0, 0, 0, 0.95), 0 0 60px rgba(56, 189, 248, 0.55)"
-              : "0 24px 64px rgba(0, 0, 0, 0.85), 0 0 45px rgba(56, 189, 248, 0.25)",
+              ? "0 36px 90px rgba(0, 0, 0, 0.4), 0 0 60px var(--accent-glow)"
+              : "var(--shadow-elevation)",
             overflow: "hidden",
             userSelect: isDragging ? "none" : "auto",
             transition: isDragging ? "none" : "box-shadow 0.2s ease, border-color 0.2s ease",
@@ -533,8 +533,8 @@ export default function FloatingRAGAssistant({
             onPointerDown={handlePointerDown}
             style={{
               height: "22px",
-              background: "linear-gradient(180deg, rgba(30, 41, 59, 0.95) 0%, rgba(20, 29, 44, 0.98) 100%)",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+              background: "var(--bg-secondary)",
+              borderBottom: "1px solid var(--border)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -550,7 +550,7 @@ export default function FloatingRAGAssistant({
                 width: "44px",
                 height: "4px",
                 borderRadius: "4px",
-                background: isDragging ? "var(--accent)" : "rgba(255, 255, 255, 0.35)",
+                background: isDragging ? "var(--accent)" : "var(--border-hover)",
                 boxShadow: isDragging ? "0 0 8px var(--accent)" : "none",
                 transition: "background 0.2s ease, box-shadow 0.2s ease",
               }}
@@ -567,8 +567,8 @@ export default function FloatingRAGAssistant({
             onPointerDown={handlePointerDown}
             style={{
               padding: "10px 14px",
-              background: "linear-gradient(135deg, rgba(30, 41, 59, 0.95) 0%, rgba(15, 23, 42, 0.98) 100%)",
-              borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+              background: "var(--header-bg)",
+              borderBottom: "1px solid var(--border)",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
@@ -594,7 +594,7 @@ export default function FloatingRAGAssistant({
                 🩺
               </div>
               <div>
-                <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "#f8fafc", display: "flex", alignItems: "center", gap: "6px" }}>
+                <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
                   <span>Clinical RAG Assistant</span>
                 </div>
                 <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
@@ -668,8 +668,8 @@ export default function FloatingRAGAssistant({
             <div
               style={{
                 padding: "6px 14px",
-                background: "rgba(15, 23, 42, 0.85)",
-                borderBottom: "1px solid rgba(255, 255, 255, 0.06)",
+                background: "var(--bg-secondary)",
+                borderBottom: "1px solid var(--border)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
@@ -679,7 +679,7 @@ export default function FloatingRAGAssistant({
             >
               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                 <span>👤</span>
-                <span style={{ color: "#f8fafc", fontWeight: 600 }}>{patient.name}</span>
+                <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{patient.name}</span>
                 <span style={{ color: "var(--text-muted)" }}>•</span>
                 <span style={{ color: "var(--text-secondary)" }}>{patient.plan_name}</span>
               </div>
@@ -712,7 +712,7 @@ export default function FloatingRAGAssistant({
               display: "flex",
               flexDirection: "column",
               gap: "14px",
-              background: "rgba(10, 14, 23, 0.6)",
+              background: "var(--bg-card)",
             }}
           >
             {messages.length === 0 ? (
@@ -730,7 +730,7 @@ export default function FloatingRAGAssistant({
                     height: "48px",
                     borderRadius: "12px",
                     background: "linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(129, 140, 248, 0.15) 100%)",
-                    border: "1px solid rgba(56, 189, 248, 0.3)",
+                    border: "1px solid var(--border)",
                     display: "grid",
                     placeItems: "center",
                     fontSize: "1.6rem",
@@ -739,7 +739,7 @@ export default function FloatingRAGAssistant({
                 >
                   🩺
                 </div>
-                <div style={{ fontSize: "1rem", fontWeight: 700, color: "#f8fafc", marginBottom: "6px" }}>
+                <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "6px" }}>
                   Clinical RAG Q&amp;A
                 </div>
                 <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", lineHeight: 1.5, marginBottom: "16px" }}>
@@ -767,8 +767,8 @@ export default function FloatingRAGAssistant({
                         textAlign: "left",
                         fontSize: "0.78rem",
                         color: "var(--text-primary)",
-                        background: idx === 0 ? "rgba(56, 189, 248, 0.08)" : "rgba(255, 255, 255, 0.04)",
-                        border: idx === 0 ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(255, 255, 255, 0.08)",
+                        background: idx === 0 ? "rgba(56, 189, 248, 0.12)" : "var(--bg-glass)",
+                        border: idx === 0 ? "1px solid var(--accent)" : "1px solid var(--border)",
                         borderRadius: "8px",
                         cursor: "pointer",
                         display: "flex",
@@ -814,12 +814,12 @@ export default function FloatingRAGAssistant({
                         borderRadius: isUser ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
                         background: isUser
                           ? "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)"
-                          : "rgba(30, 41, 59, 0.85)",
-                        color: "#ffffff",
+                          : "var(--bg-secondary)",
+                        color: isUser ? "#ffffff" : "var(--text-primary)",
                         fontSize: "0.83rem",
                         lineHeight: 1.5,
-                        border: isUser ? "none" : isEntireSoap ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid rgba(255, 255, 255, 0.09)",
-                        boxShadow: "0 4px 16px rgba(0, 0, 0, 0.25)",
+                        border: isUser ? "none" : isEntireSoap ? "1px solid var(--accent)" : "1px solid var(--border)",
+                        boxShadow: "0 4px 16px rgba(0, 0, 0, 0.08)",
                       }}
                     >
                       {/* Assistant Header with section tag and speak button */}
@@ -831,14 +831,14 @@ export default function FloatingRAGAssistant({
                             alignItems: "center",
                             marginBottom: "6px",
                             paddingBottom: "4px",
-                            borderBottom: "1px solid rgba(255, 255, 255, 0.07)",
+                            borderBottom: "1px solid var(--border)",
                           }}
                         >
                           <span
                             style={{
                               fontSize: "0.68rem",
                               fontWeight: 700,
-                              color: isEntireSoap ? "var(--accent)" : "var(--accent)",
+                              color: "var(--accent)",
                               textTransform: "uppercase",
                               letterSpacing: "0.04em",
                               display: "flex",
@@ -878,9 +878,10 @@ export default function FloatingRAGAssistant({
                           maxHeight: isEntireSoap ? "380px" : "none",
                           overflowY: isEntireSoap ? "auto" : "visible",
                           padding: isEntireSoap ? "10px 12px" : 0,
-                          background: isEntireSoap ? "rgba(10, 14, 23, 0.75)" : "transparent",
+                          background: isEntireSoap ? "var(--bg-card)" : "transparent",
                           borderRadius: isEntireSoap ? "8px" : 0,
-                          border: isEntireSoap ? "1px solid rgba(56, 189, 248, 0.2)" : "none",
+                          border: isEntireSoap ? "1px solid var(--border)" : "none",
+                          color: "var(--text-primary)",
                         }}
                       >
                         {m.content}
@@ -892,7 +893,7 @@ export default function FloatingRAGAssistant({
                           style={{
                             marginTop: "8px",
                             paddingTop: "6px",
-                            borderTop: "1px dashed rgba(255, 255, 255, 0.12)",
+                            borderTop: "1px dashed var(--border)",
                             fontSize: "0.74rem",
                             color: "var(--text-secondary)",
                           }}
@@ -902,7 +903,7 @@ export default function FloatingRAGAssistant({
                             <span>Retrieved Source: [{m.citedSection || "Medical Record"}]</span>
                           </div>
                           {m.evidence && m.evidence.length > 0 && (
-                            <div style={{ background: "rgba(0, 0, 0, 0.25)", padding: "6px 8px", borderRadius: "6px", fontStyle: "italic", borderLeft: "2px solid var(--accent)" }}>
+                            <div style={{ background: "var(--bg-card)", padding: "6px 8px", borderRadius: "6px", fontStyle: "italic", borderLeft: "2px solid var(--accent)", color: "var(--text-secondary)" }}>
                               &ldquo;{m.evidence[0]}&rdquo;
                             </div>
                           )}
@@ -920,8 +921,9 @@ export default function FloatingRAGAssistant({
                   alignSelf: "flex-start",
                   padding: "8px 14px",
                   borderRadius: "12px",
-                  background: "rgba(30, 41, 59, 0.7)",
+                  background: "var(--bg-secondary)",
                   color: "var(--text-muted)",
+                  border: "1px solid var(--border)",
                   fontSize: "0.78rem",
                   display: "flex",
                   alignItems: "center",
@@ -944,8 +946,8 @@ export default function FloatingRAGAssistant({
               padding: "10px 12px",
               display: "flex",
               gap: "8px",
-              background: "rgba(15, 23, 42, 0.95)",
-              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+              background: "var(--header-bg)",
+              borderTop: "1px solid var(--border)",
             }}
           >
             <input

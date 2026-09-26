@@ -10,6 +10,7 @@ import TTSPlayer from "@/components/TTSPlayer";
 import FinalOutcome from "@/components/FinalOutcome";
 import SOAPRagChat from "@/components/SOAPRagChat";
 import FloatingRAGAssistant from "@/components/FloatingRAGAssistant";
+import ThemeToggle from "@/components/ThemeToggle";
 import { authorize, submitReview, type AuthResponse } from "@/lib/api";
 
 type Phase = "input" | "loading" | "review" | "submitting" | "outcome";
@@ -21,6 +22,40 @@ export default function Home() {
   const [authResult, setAuthResult] = useState<AuthResponse | null>(null);
   const [finalOutcome, setFinalOutcome] = useState("");
   const [error, setError] = useState("");
+
+  /* ── Preset Case Definitions ────────────────────────────────────────── */
+  const PRESET_CASES = [
+    {
+      id: "P001",
+      name: "Alex Morgan",
+      ageGender: "44F",
+      plan: "Horizon BCBS PPO",
+      condition: "L5-S1 Radiculopathy (10w pain, 8w physio)",
+      criteriaSummary: "Pain ≥6w ✓ • Physio ≥6w ✓ • Active Plan ✓",
+      verdict: "APPROVE",
+      note: "Back pain for 10 weeks. Physiotherapy for 8 weeks.",
+    },
+    {
+      id: "P002",
+      name: "Jordan Lee",
+      ageGender: "37M",
+      plan: "Aetna Choice POS",
+      condition: "Axial Lumbar Strain (9w pain, 0w physio)",
+      criteriaSummary: "Pain ≥6w ✓ • Physio 0w ✗ • Active Plan ✓",
+      verdict: "DENY",
+      note: "Patient presents with back pain for 9 weeks. No physiotherapy was tried.",
+    },
+    {
+      id: "P003",
+      name: "Casey Kim",
+      ageGender: "50NB",
+      plan: "UnitedHealthcare (Inactive)",
+      condition: "Chronic Back Ache (12w pain, 0w physio)",
+      criteriaSummary: "Pain ≥6w ✓ • Physio 0w ✗ • Policy Inactive ✗",
+      verdict: "DENY",
+      note: "Back pain for 12 weeks. No physiotherapy was tried.",
+    },
+  ];
 
   /* ── Phase 1: Submit to /api/authorize ──────────────────────────────── */
   async function handleSubmit() {
@@ -68,139 +103,189 @@ export default function Home() {
 
   return (
     <>
-      {/* ── Header ──────────────────────────────────────────────────────── */}
+      {/* ── Modern Executive App Header ───────────────────────────────── */}
       <header className="app-header">
-        <div className="app-logo-card" title="MRI IQ - Prior Authorization Engine">
-          <div
-            style={{
-              width: "100%",
-              height: "100%",
-              background: "linear-gradient(135deg, var(--accent) 0%, #818cf8 100%)",
-              display: "grid",
-              placeItems: "center",
-              fontSize: "1.25rem",
-              borderRadius: "8px",
-              boxShadow: "0 0 12px rgba(56, 189, 248, 0.35)",
-            }}
-          >
-            🩺
+        <div className="header-brand-wrap">
+          <div className="app-logo-card" title="MRI IQ — Autonomous Prior Authorization Intelligence">
+            <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>🩺</span>
+          </div>
+          <div>
+            <div className="app-logo">
+              MRI<span className="accent">IQ</span>
+            </div>
+            <div className="app-tagline">Clinical Prior Auth Engine</div>
           </div>
         </div>
-        <div className="app-logo">
-          MRI<span className="accent">IQ</span>
+
+        <div className="header-center-info">
+          <div className="telemetry-beacon">
+            <span className="beacon-dot" />
+            <span>LangGraph HITL Active</span>
+          </div>
+          <span className="status-badge info" style={{ fontSize: "0.72rem", padding: "4px 10px" }}>
+            CPT 72148
+          </span>
         </div>
-        <span className="app-badge">Prior Auth Engine</span>
-        <span
-          className="status-badge info"
-          style={{ marginLeft: "auto", fontSize: "0.72rem", padding: "3px 10px", display: "flex", alignItems: "center", gap: "6px" }}
-          title="Progressive Web App Ready"
-        >
-          📱 PWA Enabled
-        </span>
+
+        <div className="header-actions">
+          <ThemeToggle />
+          <span
+            className="status-badge info"
+            style={{
+              fontSize: "0.74rem",
+              padding: "5px 12px",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+            title="Progressive Web App Ready"
+          >
+            📱 PWA Ready
+          </span>
+        </div>
       </header>
 
-      {/* ── Main Content ────────────────────────────────────────────────── */}
+      {/* ── Main Workspace ────────────────────────────────────────────── */}
       <main className="app-main">
-        {/* Error banner */}
+        {/* Error notification banner */}
         {error && (
-          <div className="card animate-in" style={{ marginBottom: 20, borderColor: "var(--deny)" }}>
-            <p style={{ color: "var(--deny)", fontSize: "0.9rem" }}>⚠ {error}</p>
+          <div className="card animate-in" style={{ marginBottom: 24, borderColor: "var(--deny)" }}>
+            <p style={{ color: "var(--deny)", fontSize: "0.92rem", fontWeight: 600 }}>
+              ⚠ Prior Authorization Error: {error}
+            </p>
           </div>
         )}
 
         {/* ── INPUT PHASE ─────────────────────────────────────────────── */}
         {phase === "input" && (
           <div className="animate-in">
-            <div className="card" style={{ marginBottom: 24 }}>
-              <div className="card-header">
-                <div className="card-icon blue">📋</div>
-                <div>
-                  <div className="card-title">New Authorization Request</div>
-                  <div className="card-subtitle">
-                    Enter patient ID and clinical note for MRI prior authorization
-                  </div>
-                </div>
+            {/* Modern Hero Welcome */}
+            <section className="hero-section">
+              <div className="hero-pill">
+                <span>⚡ Evidence-Grounded Lumbar Spine MRI Audit</span>
               </div>
+              <h1 className="hero-title">
+                Prior Authorization <span className="gradient-text">Intelligence</span>
+              </h1>
+              <p className="hero-subtitle">
+                Autonomous clinical documentation extraction, deterministic guideline verification, and real-time physician RAG powered by OpenAI and LangGraph.
+              </p>
+              <div className="hero-badges-row">
+                <span className="hero-feature-tag">🤖 OpenAI gpt-5.6-terra</span>
+                <span className="hero-feature-tag">🛡️ Human-in-the-Loop Interruption</span>
+                <span className="hero-feature-tag">📋 SOAP Notes Grounding</span>
+                <span className="hero-feature-tag">🧠 Dual-Memory RAG</span>
+              </div>
+            </section>
 
-              {/* Quick test presets */}
-              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "18px", alignItems: "center" }}>
-                <span style={{ fontSize: "0.78rem", fontWeight: 600, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                  Quick Presets:
+            {/* Interactive Clinical Case Presets */}
+            <div className="presets-container">
+              <div className="presets-header-row">
+                <span className="presets-title">
+                  <span>📂</span> Clinical Case Test Scenarios (Select to Preload)
                 </span>
-                <button
-                  type="button"
-                  className={patientId === "P001" ? "btn btn-primary" : "btn btn-ghost"}
-                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
-                  onClick={() => {
-                    setPatientId("P001");
-                    setClinicalNote("Back pain for 10 weeks. Physiotherapy for 8 weeks.");
-                  }}
-                  id="preset-p001"
-                >
-                  P001
-                </button>
-                <button
-                  type="button"
-                  className={patientId === "P002" ? "btn btn-primary" : "btn btn-ghost"}
-                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
-                  onClick={() => {
-                    setPatientId("P002");
-                    setClinicalNote("Patient presents with back pain for 9 weeks. No physiotherapy was tried.");
-                  }}
-                  id="preset-p002"
-                >
-                  P002
-                </button>
-                <button
-                  type="button"
-                  className={patientId === "P003" ? "btn btn-primary" : "btn btn-ghost"}
-                  style={{ padding: "4px 12px", fontSize: "0.8rem" }}
-                  onClick={() => {
-                    setPatientId("P003");
-                    setClinicalNote("Back pain for 12 weeks. No physiotherapy was tried.");
-                  }}
-                  id="preset-p003"
-                >
-                  P003
-                </button>
                 {patientId && (
                   <button
                     type="button"
                     className="btn btn-ghost"
-                    style={{ padding: "4px 10px", fontSize: "0.8rem", color: "var(--text-muted)" }}
+                    style={{ padding: "4px 12px", fontSize: "0.75rem", borderRadius: "100px" }}
                     onClick={() => {
                       setPatientId("");
                       setClinicalNote("");
                     }}
                     id="preset-clear"
-                    title="Clear patient selection"
+                    title="Clear current case selection"
                   >
-                    ✕ Clear
+                    ✕ Clear Selection
                   </button>
                 )}
               </div>
 
+              <div className="preset-cards-grid">
+                {PRESET_CASES.map((preset) => {
+                  const isSelected = patientId === preset.id;
+                  const isApprove = preset.verdict === "APPROVE";
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      className={`preset-card-btn ${isSelected ? "active" : ""}`}
+                      onClick={() => {
+                        setPatientId(preset.id);
+                        setClinicalNote(preset.note);
+                      }}
+                      id={`preset-${preset.id.toLowerCase()}`}
+                    >
+                      <div className="preset-top-row">
+                        <div className="preset-patient-badge">
+                          <div className="preset-avatar">
+                            {preset.id.replace("0", "")}
+                          </div>
+                          <div>
+                            <div className="preset-name">{preset.name}</div>
+                            <div style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>
+                              {preset.ageGender} • {preset.plan}
+                            </div>
+                          </div>
+                        </div>
+                        <span className={`preset-verdict-pill ${isApprove ? "approve" : "deny"}`}>
+                          {isApprove ? "● Approve" : "● Deny"}
+                        </span>
+                      </div>
+
+                      <div className="preset-desc">{preset.condition}</div>
+
+                      <div className="preset-meta-tags">
+                        <span className="preset-meta-chip">{preset.criteriaSummary}</span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Request Intake Card */}
+            <div className="card" style={{ marginBottom: 28 }}>
+              <div className="card-header">
+                <div className="card-icon blue">📋</div>
+                <div>
+                  <div className="card-title">Authorization Request Intake</div>
+                  <div className="card-subtitle">
+                    Enter patient ID and attending physician documentation for CPT 72148 review
+                  </div>
+                </div>
+              </div>
+
               <PatientInput value={patientId} onChange={setPatientId} />
               <ClinicalNote value={clinicalNote} onChange={setClinicalNote} />
-              <button
-                className="btn btn-primary"
-                onClick={handleSubmit}
-                disabled={!patientId.trim() || !clinicalNote.trim()}
-                id="btn-submit-auth"
-              >
-                🔍 Analyze &amp; Authorize
-              </button>
+
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleSubmit}
+                  disabled={!patientId.trim() || !clinicalNote.trim()}
+                  id="btn-submit-auth"
+                  style={{ minWidth: "200px" }}
+                >
+                  <span>🔍</span>
+                  <span>Analyze &amp; Authorize</span>
+                </button>
+
+                <span style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                  Guideline criteria: ≥6w pain &amp; ≥6w supervised physical therapy
+                </span>
+              </div>
             </div>
 
             {/* PDF preview when a patient ID is entered */}
             {patientId.trim() && (
-              <div className="card animate-in">
+              <div className="card animate-in" style={{ marginBottom: 28 }}>
                 <div className="card-header">
                   <div className="card-icon yellow">📄</div>
                   <div>
-                    <div className="card-title">Synthetic Clinical Document (SOAP Format)</div>
+                    <div className="card-title">Physician Clinical Document (SOAP Format)</div>
                     <div className="card-subtitle">
-                      Formal Physician Clinical Report for {patientId.trim().toUpperCase()}
+                      Formal Clinical Record for {patientId.trim().toUpperCase()}
                     </div>
                   </div>
                 </div>
@@ -216,8 +301,12 @@ export default function Home() {
             <div className="loading-state">
               <div className="spinner" />
               <div>
-                Extracting clinical facts with <strong>gpt-5.6-terra</strong>
-                &nbsp;and applying authorization rules...
+                <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+                  Auditing Clinical Evidence
+                </div>
+                <div>
+                  Extracting facts with <strong>OpenAI gpt-5.6-terra</strong> and executing deterministic prior auth rules...
+                </div>
               </div>
             </div>
           </div>
@@ -249,7 +338,12 @@ export default function Home() {
           <div className="card animate-in">
             <div className="loading-state">
               <div className="spinner" />
-              <div>Processing reviewer decision...</div>
+              <div>
+                <div style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
+                  Finalizing Determination
+                </div>
+                <div>Resuming LangGraph state machine with reviewer authorization decision...</div>
+              </div>
             </div>
           </div>
         )}
@@ -259,14 +353,14 @@ export default function Home() {
           <div className="animate-in">
             <FinalOutcome outcome={finalOutcome} />
             <div className="section-gap" style={{ textAlign: "center" }}>
-              <button className="btn btn-ghost" onClick={handleReset} id="btn-new-case">
-                ← Start New Case
+              <button className="btn btn-primary" onClick={handleReset} id="btn-new-case">
+                ← Initiate New Case Review
               </button>
             </div>
           </div>
         )}
 
-        {/* ── Interactive SOAP Clinical Documentation & RAG Q&A Assistant (Only shown when patient ID is added or selected) ────────────────────────────── */}
+        {/* ── Interactive SOAP Clinical Documentation & RAG Q&A Assistant ────────────────────────────── */}
         {patientId.trim() && (
           <div className="animate-in">
             <SOAPRagChat
@@ -291,9 +385,9 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── Synthetic data notice ───────────────────────────────────── */}
+        {/* ── Synthetic Data Disclaimer ───────────────────────────────── */}
         <div className="synthetic-notice">
-          SYNTHETIC DATA — NOT A REAL PATIENT
+          SYNTHETIC CLINICAL DEMONSTRATION DATA — NOT A REAL PATIENT — FOR PRIOR AUTH EVALUATION TESTING ONLY
         </div>
       </main>
 

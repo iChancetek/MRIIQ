@@ -103,6 +103,17 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){
+              try {
+                var t = localStorage.getItem('mriiq_theme');
+                if (t === 'light' || t === 'dark') {
+                  document.documentElement.setAttribute('data-theme', t);
+                } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) {
+                  document.documentElement.setAttribute('data-theme', 'light');
+                } else {
+                  document.documentElement.setAttribute('data-theme', 'dark');
+                }
+              } catch(e) {}
+
               var suppressed = [
                 'MaxListenersExceededWarning',
                 'contentscript.js',

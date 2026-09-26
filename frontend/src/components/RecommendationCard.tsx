@@ -73,22 +73,48 @@ export default function RecommendationCard({ result }: Props) {
       {/* Extracted facts grid */}
       <div className="fact-grid">
         <div className="fact-item">
-          <div className="fact-value">
-            {result.pain_weeks != null ? result.pain_weeks : "—"}
+          <div className="fact-value" style={{ color: (result.pain_weeks ?? 0) >= 6 ? "var(--approve)" : "var(--deny)" }}>
+            {result.pain_weeks != null ? `${result.pain_weeks}w` : "—"}
           </div>
-          <div className="fact-label">Pain Weeks (Req: ≥6)</div>
+          <div className="fact-label">Pain Duration (Req: ≥6w)</div>
+          <span
+            className={`status-badge ${(result.pain_weeks ?? 0) >= 6 ? "approve" : "deny"}`}
+            style={{ fontSize: "0.68rem", padding: "2px 8px", marginTop: "6px" }}
+          >
+            {(result.pain_weeks ?? 0) >= 6 ? "✓ Guideline Met" : "✗ Below Threshold"}
+          </span>
         </div>
+
         <div className="fact-item">
-          <div className="fact-value">
-            {result.physio_weeks != null ? result.physio_weeks : "—"}
+          <div className="fact-value" style={{ color: (result.physio_weeks ?? 0) >= 6 ? "var(--approve)" : "var(--deny)" }}>
+            {result.physio_weeks != null ? `${result.physio_weeks}w` : "—"}
           </div>
-          <div className="fact-label">Physio Weeks (Req: ≥6)</div>
+          <div className="fact-label">Physiotherapy Trial (Req: ≥6w)</div>
+          <span
+            className={`status-badge ${(result.physio_weeks ?? 0) >= 6 ? "approve" : "deny"}`}
+            style={{ fontSize: "0.68rem", padding: "2px 8px", marginTop: "6px" }}
+          >
+            {(result.physio_weeks ?? 0) >= 6 ? "✓ Guideline Met" : "✗ Prerequisite Missing"}
+          </span>
         </div>
+
         <div className="fact-item">
-          <div className="fact-value" style={{ fontSize: "1.1rem" }}>
-            {(result.patient as Record<string, boolean>).plan_active ? "Active" : "Inactive"}
+          <div
+            className="fact-value"
+            style={{
+              fontSize: "1.4rem",
+              color: (result.patient as Record<string, boolean>)?.plan_active ? "var(--approve)" : "var(--deny)",
+            }}
+          >
+            {(result.patient as Record<string, boolean>)?.plan_active ? "Active" : "Inactive"}
           </div>
-          <div className="fact-label">Insurance Plan</div>
+          <div className="fact-label">Insurance Plan Status</div>
+          <span
+            className={`status-badge ${(result.patient as Record<string, boolean>)?.plan_active ? "approve" : "deny"}`}
+            style={{ fontSize: "0.68rem", padding: "2px 8px", marginTop: "6px" }}
+          >
+            {(result.patient as Record<string, boolean>)?.plan_active ? "✓ Coverage Verified" : "✗ Policy Inactive"}
+          </span>
         </div>
       </div>
 
@@ -97,10 +123,11 @@ export default function RecommendationCard({ result }: Props) {
         className="summary-box"
         style={{
           marginTop: "16px",
-          padding: "18px 20px",
-          background: "rgba(56, 189, 248, 0.05)",
-          border: "1px solid rgba(56, 189, 248, 0.2)",
+          padding: "20px 22px",
+          background: "var(--accent-soft)",
+          border: "1px solid var(--border-accent)",
           borderRadius: "var(--radius-md)",
+          boxShadow: "0 4px 16px -2px rgba(0, 0, 0, 0.05)",
         }}
       >
         <div
@@ -108,7 +135,7 @@ export default function RecommendationCard({ result }: Props) {
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            marginBottom: "10px",
+            marginBottom: "12px",
           }}
         >
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
