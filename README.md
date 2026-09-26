@@ -23,6 +23,7 @@ The core design principle is:
 | **Agentic AI Orchestrator** | [LangGraph](https://langchain-ai.github.io/langgraph/) StateGraph with `MemorySaver` checkpointer & `interrupt_before` |
 | **AI Provider** | **OpenAI exclusively** — Extraction & RAG: `gpt-5.6-terra`, Structured Outputs via `max_completion_tokens`, TTS: `tts-1-hd` / `onyx` |
 | **Tool Protocol** | **Model Context Protocol (MCP)** Python SDK v2.x (`mcp`), FastMCP Server |
+| **Progressive Web App (PWA)** | Web App Manifest (`manifest.json`), Service Worker (`sw.js`), Apple Touch & Maskable Icons, Offline Shell |
 | **Speech Engine** | **Universal TTS Engine** — OpenAI `tts-1-hd` with automatic seamless Web Speech API (`window.speechSynthesis`) fallback |
 | **Cloud & Hosting** | **Firebase App Hosting** (`quantiq221` / `mriiq` / `us-east4`), Google Cloud, custom domain `mriiq.fit` |
 | **Document Generation** | [ReportLab](https://www.reportlab.com/) synthetic clinical PDF generator (Formal SOAP Notes format) |
@@ -170,6 +171,32 @@ To eliminate runtime audio failures (such as `503 Service Unavailable` when serv
    - **Clinical Notes Area**: "🔊 Listen to Note" / "⏹ Stop" button in [ClinicalNote.tsx](src/components/ClinicalNote.tsx).
    - **Clinical Summary Area**: "🔊 Listen to Summary" / "⏹ Stop" button in [RecommendationCard.tsx](src/components/RecommendationCard.tsx).
    - **RAG Answers**: "🔊 Listen" / "⏹ Stop" button on every RAG query response in [SOAPRagChat.tsx](src/components/SOAPRagChat.tsx).
+
+---
+
+## 📱 Progressive Web App (PWA) & Mobile Installation
+
+MRIIQ is fully converted into a **Progressive Web App (PWA)** installable on iOS, Android, macOS, Windows, and Linux:
+
+- **Web App Manifest ([`public/manifest.json`](public/manifest.json))**:
+  - `name`: "MRIIQ — Prior Authorization Intelligence"
+  - `display`: "standalone"
+  - `theme_color`: `#0284c7`
+  - `background_color`: `#0a0e17`
+  - Quick action shortcuts for instant patient loading (`P001`, `P002`, `P003`).
+- **Service Worker ([`public/sw.js`](public/sw.js))**:
+  - Registered via Client Component [`PWARegistration.tsx`](src/components/PWARegistration.tsx).
+  - Pre-caches core app shell, fonts, and icons.
+  - Implements network-first for live `/api/*` authorization and RAG routes with graceful offline fallback notice.
+  - Implements stale-while-revalidate for static assets.
+- **PWA App Icon Suite**:
+  - `icon-512x512.png`: High-resolution maskable app icon for splash screens and store listings.
+  - `icon-192x192.png`: Standard homescreen icon.
+  - `apple-touch-icon.png` (180x180): Optimized for iOS Safari home screen bookmarks.
+  - `favicon-32x32.png` & `favicon-16x16.png`: Multi-resolution browser tab icons.
+  - `og-image.png` (1200x630): Social media OpenGraph preview card for sharing on LinkedIn, X/Twitter, and clinical portals.
+- **Enhanced Header**:
+  - Displays the glowing high-res PWA logo directly in the application header with status pill indicator (`📱 PWA Enabled`).
 
 ---
 

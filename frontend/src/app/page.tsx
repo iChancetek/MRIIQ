@@ -69,11 +69,28 @@ export default function Home() {
     <>
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <header className="app-header">
-        <div className="app-logo-icon">IQ</div>
+        <img
+          src="/icons/icon-192x192.png"
+          alt="MRIIQ PWA Icon"
+          width="40"
+          height="40"
+          style={{
+            borderRadius: "10px",
+            boxShadow: "0 0 16px rgba(56, 189, 248, 0.4)",
+            border: "1px solid rgba(56, 189, 248, 0.3)",
+          }}
+        />
         <div className="app-logo">
           MRI<span className="accent">IQ</span>
         </div>
         <span className="app-badge">Prior Auth Engine</span>
+        <span
+          className="status-badge info"
+          style={{ marginLeft: "auto", fontSize: "0.72rem", padding: "3px 10px", display: "flex", alignItems: "center", gap: "6px" }}
+          title="Progressive Web App Ready"
+        >
+          📱 PWA Enabled
+        </span>
       </header>
 
       {/* ── Main Content ────────────────────────────────────────────────── */}
