@@ -136,7 +136,13 @@ export default function Home() {
       <header className="app-header">
         <div className="header-brand-wrap">
           <div className="app-logo-card" title="MRI IQ — Autonomous Prior Authorization Intelligence">
-            <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>🩺</span>
+            <img
+              src="/icons/icon-192x192.png"
+              alt="MRI IQ"
+              width="42"
+              height="42"
+              style={{ width: "100%", height: "100%", objectFit: "cover", borderRadius: "10px" }}
+            />
           </div>
           <div>
             <div className="app-logo">

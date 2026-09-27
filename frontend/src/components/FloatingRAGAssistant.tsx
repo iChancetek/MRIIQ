@@ -488,7 +488,13 @@ export default function FloatingRAGAssistant({
         tabIndex={0}
       >
         <span style={{ fontSize: "1.1rem", opacity: 0.85 }}>⠿</span>
-        <span style={{ fontSize: "1.2rem" }}>🩺</span>
+        <img
+          src="/icons/icon-192x192.png"
+          alt="AI Assistant"
+          width="22"
+          height="22"
+          style={{ width: "22px", height: "22px", borderRadius: "6px", objectFit: "cover" }}
+        />
         <span>Clinical RAG</span>
         <span
           style={{
@@ -585,14 +591,21 @@ export default function FloatingRAGAssistant({
                   width: "32px",
                   height: "32px",
                   borderRadius: "8px",
-                  background: "linear-gradient(135deg, var(--accent) 0%, #818cf8 100%)",
+                  overflow: "hidden",
                   display: "grid",
                   placeItems: "center",
-                  fontSize: "1.1rem",
                   flexShrink: 0,
+                  boxShadow: "0 0 10px rgba(56, 189, 248, 0.4)",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
                 }}
               >
-                🩺
+                <img
+                  src="/icons/icon-192x192.png"
+                  alt="Clinical RAG"
+                  width="32"
+                  height="32"
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
               </div>
               <div>
                 <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
