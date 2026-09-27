@@ -45,3 +45,19 @@ env:
     availability:
       - BUILD
       - RUNTIME
+  - variable: OPENAI_TTS_MODEL
+    value: "tts-1-hd"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: OPENAI_TTS_VOICE
+    value: "onyx"
+    availability:
+      - BUILD
+      - RUNTIME
+  - variable: OPENAI_API_KEY
+    secret: OPENAI_API_KEY
+    availability:
+      - BUILD
+      - RUNTIME
+
