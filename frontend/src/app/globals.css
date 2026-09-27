@@ -984,6 +984,45 @@ body::after {
   margin-top: 48px;
 }
 
+/* ── App Footer ────────────────────────────────────────────────────────── */
+.app-footer {
+  margin-top: 20px;
+  padding: 16px 0 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+.app-footer-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 20px;
+  border-radius: var(--radius-full);
+  background: var(--bg-glass);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(8px);
+}
+
+.app-footer-content strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.footer-dot {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.footer-tech {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
 /* ── Patient Identification Card & Quick Pick ────────────────────────── */
 .patient-quick-row {
   display: flex;

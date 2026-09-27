@@ -488,7 +488,22 @@ export default function FloatingRAGAssistant({
         tabIndex={0}
       >
         <span style={{ fontSize: "1.1rem", opacity: 0.85 }}>⠿</span>
-        <span style={{ fontSize: "1.2rem" }}>🩺</span>
+        <svg
+          viewBox="0 0 36 36"
+          width="20"
+          height="20"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ display: "block", color: "#ffffff" }}
+          aria-hidden="true"
+        >
+          <circle cx="18" cy="17" r="13" stroke="currentColor" strokeWidth="2.4" opacity="0.95" />
+          <circle cx="18" cy="17" r="9.5" stroke="#a5f3fc" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.85" />
+          <circle cx="18" cy="17" r="5.5" fill="rgba(11, 17, 32, 0.45)" stroke="#e0e7ff" strokeWidth="1.4" />
+          <rect x="5.5" y="15.5" width="25" height="3" rx="1.5" fill="currentColor" />
+          <rect x="11.5" y="14" width="9" height="1.8" rx="0.9" fill="#38bdf8" />
+          <path d="M12 28.5h12v2.5a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-2.5z" fill="currentColor" opacity="0.9" />
+        </svg>
         <span>Clinical RAG</span>
         <span
           style={{
@@ -588,11 +603,25 @@ export default function FloatingRAGAssistant({
                   background: "linear-gradient(135deg, var(--accent) 0%, #818cf8 100%)",
                   display: "grid",
                   placeItems: "center",
-                  fontSize: "1.1rem",
                   flexShrink: 0,
                 }}
               >
-                🩺
+                <svg
+                  viewBox="0 0 36 36"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                  style={{ display: "block", color: "#ffffff" }}
+                  aria-hidden="true"
+                >
+                  <circle cx="18" cy="17" r="13" stroke="currentColor" strokeWidth="2.4" opacity="0.95" />
+                  <circle cx="18" cy="17" r="9.5" stroke="#a5f3fc" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.85" />
+                  <circle cx="18" cy="17" r="5.5" fill="rgba(11, 17, 32, 0.45)" stroke="#e0e7ff" strokeWidth="1.4" />
+                  <rect x="5.5" y="15.5" width="25" height="3" rx="1.5" fill="currentColor" />
+                  <rect x="11.5" y="14" width="9" height="1.8" rx="0.9" fill="#38bdf8" />
+                  <path d="M12 28.5h12v2.5a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-2.5z" fill="currentColor" opacity="0.9" />
+                </svg>
               </div>
               <div>
                 <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -734,11 +763,25 @@ export default function FloatingRAGAssistant({
                     border: "1px solid var(--border)",
                     display: "grid",
                     placeItems: "center",
-                    fontSize: "1.6rem",
                     margin: "0 auto 12px",
                   }}
                 >
-                  🩺
+                  <svg
+                    viewBox="0 0 36 36"
+                    width="28"
+                    height="28"
+                    fill="none"
+                    xmlns="http://www.w3.org/2000/svg"
+                    style={{ display: "block", color: "var(--accent)" }}
+                    aria-hidden="true"
+                  >
+                    <circle cx="18" cy="17" r="13" stroke="currentColor" strokeWidth="2.4" opacity="0.95" />
+                    <circle cx="18" cy="17" r="9.5" stroke="#a5f3fc" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.85" />
+                    <circle cx="18" cy="17" r="5.5" fill="rgba(11, 17, 32, 0.45)" stroke="#e0e7ff" strokeWidth="1.4" />
+                    <rect x="5.5" y="15.5" width="25" height="3" rx="1.5" fill="currentColor" />
+                    <rect x="11.5" y="14" width="9" height="1.8" rx="0.9" fill="#38bdf8" />
+                    <path d="M12 28.5h12v2.5a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-2.5z" fill="currentColor" opacity="0.9" />
+                  </svg>
                 </div>
                 <div style={{ fontSize: "1rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "6px" }}>
                   Clinical RAG Q&amp;A

@@ -1,5 +1,7 @@
 # MRIIQ — MRI Prior Authorization Intelligence System
 
+**MRI IQ Developed by Chancellor Minus**
+
 > **DISCLAIMER:** **SYNTHETIC-DATA DEMO ONLY.** No real Protected Health Information (PHI) or real patient records are used at any stage. All clinical notes, patient demographics, and documents are entirely synthetic.
 
 ---
@@ -283,3 +285,7 @@ Navigate to [http://localhost:3000](http://localhost:3000) or [http://mriiq.fit:
 2. **Server-Side API Key Protection**: `OPENAI_API_KEY` is exclusively handled in server-side runtimes and never packaged in client bundles.
 3. **Deterministic Authority**: AI extractions are strictly evaluated against rigid medical criteria; no generative model can issue an unvalidated authorization approval.
 4. **Human Oversight (HITL)**: Prior authorization decisions require human clinical reviewer approval with full immutable audit logging.
+
+---
+
+**MRI IQ Developed by Chancellor Minus**
