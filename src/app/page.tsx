@@ -32,7 +32,6 @@ export default function Home() {
       plan: "Horizon BCBS PPO",
       condition: "L5-S1 Radiculopathy (10w pain, 8w physio)",
       criteriaSummary: "Pain ≥6w ✓ • Physio ≥6w ✓ • Active Plan ✓",
-      verdict: "APPROVE",
       note: "Back pain for 10 weeks. Physiotherapy for 8 weeks.",
     },
     {
@@ -42,7 +41,6 @@ export default function Home() {
       plan: "Aetna Choice POS",
       condition: "Axial Lumbar Strain (9w pain, 0w physio)",
       criteriaSummary: "Pain ≥6w ✓ • Physio 0w ✗ • Active Plan ✓",
-      verdict: "DENY",
       note: "Patient presents with back pain for 9 weeks. No physiotherapy was tried.",
     },
     {
@@ -52,7 +50,6 @@ export default function Home() {
       plan: "UnitedHealthcare (Inactive)",
       condition: "Chronic Back Ache (12w pain, 0w physio)",
       criteriaSummary: "Pain ≥6w ✓ • Physio 0w ✗ • Policy Inactive ✗",
-      verdict: "DENY",
       note: "Back pain for 12 weeks. No physiotherapy was tried.",
     },
   ];
@@ -236,7 +233,6 @@ export default function Home() {
               <div className="preset-cards-grid">
                 {PRESET_CASES.map((preset) => {
                   const isSelected = patientId.trim().toUpperCase() === preset.id;
-                  const isApprove = preset.verdict === "APPROVE";
                   return (
                     <button
                       key={preset.id}
@@ -248,7 +244,7 @@ export default function Home() {
                       <div className="preset-top-row">
                         <div className="preset-patient-badge">
                           <div className="preset-avatar">
-                            {preset.id.replace("0", "")}
+                            {preset.id}
                           </div>
                           <div>
                             <div className="preset-name">{preset.name}</div>
@@ -257,9 +253,14 @@ export default function Home() {
                             </div>
                           </div>
                         </div>
-                        <span className={`preset-verdict-pill ${isApprove ? "approve" : "deny"}`}>
-                          {isApprove ? "● Approve" : "● Deny"}
-                        </span>
+                        {isSelected && (
+                          <span
+                            className="status-badge info animate-in"
+                            style={{ fontSize: "0.68rem", padding: "2px 8px" }}
+                          >
+                            ● Selected
+                          </span>
+                        )}
                       </div>
 
                       <div className="preset-desc">{preset.condition}</div>
