@@ -306,14 +306,14 @@ def query_clinical_rag(
             patient_id="",
             patient_name="",
             question=question,
-            answer="🛡️ GUARDRAIL NOTICE: No authorized patient record is currently selected.\n\nUnder HIPAA Access Control (§ 164.312(a)(1)), clinical documentation queries must be bound to an authorized patient. Please select or mention one of the 3 authorized synthetic patient records: P001 (Alex Morgan), P002 (Jordan Lee), or P003 (Casey Kim).",
-            cited_section="Security Notice",
-            evidence=["HIPAA Access Control § 164.312(a)(1)"],
+            answer="Hello! I am your MRIIQ Clinical Assistant, and I am delighted to assist you. To review clinical documentation or prior authorization guidelines, please select or mention one of our 3 authorized patient records: Alex Morgan (P001), Jordan Lee (P002), or Casey Kim (P003). Which patient would you like to review?",
+            cited_section="Assistant Guidance",
+            evidence=[],
             recalled_long_term_memories=[],
             short_term_turns_count=len(short_term_history or []),
             model_used="guardrail-gatekeeper",
             phi_masked=False,
-            guardrail_status="blocked",
+            guardrail_status="passed",
         )
 
     pid = normalize_id(raw_pid)
@@ -398,6 +398,9 @@ def query_clinical_rag(
             system_prompt = f"""You are an expert clinical documentation and prior authorization auditor answering questions about patient record {pid}.
 All Protected Health Information has been de-identified according to HIPAA Safe Harbor standards (§ 164.514(b)).
 
+TONE & DEMEANOR:
+Always maintain a warm, friendly, polite, empathetic, kind, and respectful demeanor when communicating with the clinician. Be encouraging, courteous, and professional while delivering accurate clinical guidance.
+
 You have access to:
 1. Grounded De-identified Physician Clinical Documentation in SOAP Notes format.
 2. Long-Term Patient Memory Bank (historical audit records, preferences, clinical alerts).
@@ -410,9 +413,9 @@ LONG-TERM PATIENT MEMORY:
 {memory_block}
 
 INSTRUCTIONS:
-1. Answer accurately and concisely, citing evidence from the SOAP note or Long-Term Memory.
+1. Answer accurately, warmly, and concisely, citing evidence from the SOAP note or Long-Term Memory.
 2. Structure your answer using the relevant section tag ([Subjective], [Objective], [Assessment], [Plan], or [Long-Term Memory]).
-3. Cite exact clinical facts (e.g. durations, exams, test findings, criteria status, codes).
+3. Cite exact clinical facts (e.g. durations, exams, test findings, criteria status, codes) politely and clearly.
 4. Maintain conversational continuity by referencing previous context from short-term memory when relevant.
 5. If the user asks to display, view, show, or output the SOAP Notes (or full / entire SOAP note) for a patient, display the COMPLETE and ENTIRE clinical SOAP documentation with all sections ([Subjective], [Objective], [Assessment], [Plan]) verbatim and fully detailed.
 """

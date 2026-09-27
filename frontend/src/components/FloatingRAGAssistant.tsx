@@ -22,6 +22,30 @@ interface ChatMessage {
   shortTermTurns?: number;
   phiMasked?: boolean;
   guardrailStatus?: "passed" | "blocked";
+  pendingQuery?: string;
+  actionChips?: Array<{ id: string; label: string; sublabel?: string }>;
+}
+
+function isGreetingOrGeneralInquiry(text: string): boolean {
+  if (!text) return false;
+  const t = text.trim().toLowerCase().replace(/[!?,.]/g, "");
+  const greetings = [
+    "hi",
+    "hello",
+    "hey",
+    "greetings",
+    "howdy",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "help",
+    "who are you",
+    "what can you do",
+    "start",
+    "welcome",
+  ];
+  if (greetings.includes(t)) return true;
+  return /^(hi|hello|hey|good\s*(morning|afternoon|evening)|greetings|howdy)\b/i.test(t);
 }
 
 // Initial default long-term memories for each patient
@@ -422,13 +446,13 @@ export default function FloatingRAGAssistant({
   };
 
   /* ── Traditional RAG Query Execution ───────────────────────────────── */
-  const executeRagQuery = async (queryText: string) => {
+  const executeRagQuery = async (queryText: string, overridePatientId?: string) => {
     const q = queryText.trim();
     if (!q || isQuerying) return;
 
     // Detect if patient name or ID is mentioned in the query
     const detectedId = detectPatientInText(q);
-    let targetPatientId = activePatientId;
+    let targetPatientId = overridePatientId || activePatientId;
 
     if (detectedId) {
       targetPatientId = detectedId;
@@ -445,16 +469,38 @@ export default function FloatingRAGAssistant({
     setMessages((prev) => [...prev, userMsg]);
     setQuestion("");
 
+    const isGreeting = isGreetingOrGeneralInquiry(q);
+
     // If no patient ID is selected and no patient was mentioned in query
     if (!targetPatientId) {
       const guidanceMsg: ChatMessage = {
         id: `asst-${Date.now()}`,
         role: "assistant",
-        content:
-          "Please enter a patient ID in the case form or mention the patient's name (e.g., Alex Morgan, Jordan Lee, Casey Kim) in your query to retrieve clinical documentation.",
-        citedSection: "Notice",
+        content: isGreeting
+          ? "Hello! I am your MRIIQ Clinical Documentation & Prior Authorization Assistant. I am here to assist you with physician notes, clinical evidence, and guidelines with warmth and accuracy.\n\nPlease select one of our authorized patient records below to get started, or simply mention their name in your question:"
+          : "Thank you for your question! I would be delighted to look that up for you.\n\nTo ensure I retrieve the exact clinical records and prior authorization details, please select which patient this is for:",
+        citedSection: "Assistant Guidance",
+        pendingQuery: isGreeting ? undefined : q,
+        actionChips: [
+          { id: "P001", label: "Alex Morgan (P001)", sublabel: "Horizon BCBS PPO • Lumbar Radiculopathy" },
+          { id: "P002", label: "Jordan Lee (P002)", sublabel: "Aetna Open Choice • Conservative Care Needed" },
+          { id: "P003", label: "Casey Kim (P003)", sublabel: "UHC Choice Plus • Eligibility Audit" },
+        ],
       };
       setMessages((prev) => [...prev, guidanceMsg]);
+      return;
+    }
+
+    // If it is a greeting with an active patient selected
+    if (isGreeting) {
+      const patientName = SOAP_PATIENTS[targetPatientId]?.name || targetPatientId;
+      const greetingMsg: ChatMessage = {
+        id: `asst-${Date.now()}`,
+        role: "assistant",
+        content: `Hello! It is a pleasure to assist you. I am ready to review clinical documentation, prior authorization guidelines, and SOAP records for **${patientName} (${targetPatientId})**.\n\nYou can ask about ${patientName}'s pain duration, straight leg raise findings, physical therapy completion, or ask to view the entire SOAP note. How may I help you today?`,
+        citedSection: "Assistant Guidance",
+      };
+      setMessages((prev) => [...prev, greetingMsg]);
       return;
     }
 
@@ -493,13 +539,32 @@ export default function FloatingRAGAssistant({
       const errMsg: ChatMessage = {
         id: `err-${Date.now()}`,
         role: "assistant",
-        content: `Error querying clinical RAG: ${err instanceof Error ? err.message : "Request failed"}`,
-        citedSection: "Error",
+        content: `I apologize, but I encountered an error querying the clinical records: ${err instanceof Error ? err.message : "Request failed"}. Please try again or reselect the patient.`,
+        citedSection: "Assistant Guidance",
         guardrailStatus: "blocked",
       };
       setMessages((prev) => [...prev, errMsg]);
     } finally {
       setIsQuerying(false);
+    }
+  };
+
+  const handleSelectPatientFromAssistant = (patientId: string, pendingQ?: string) => {
+    setActivePatientId(patientId);
+    onSelectPatient?.(patientId);
+
+    const ptName = SOAP_PATIENTS[patientId]?.name || patientId;
+
+    if (pendingQ && !isGreetingOrGeneralInquiry(pendingQ)) {
+      executeRagQuery(pendingQ, patientId);
+    } else {
+      const welcomeMsg: ChatMessage = {
+        id: `asst-${Date.now()}`,
+        role: "assistant",
+        content: `I have loaded clinical records for **${ptName} (${patientId})**.\n\nI can help you review ${ptName}'s subjective symptoms, objective exam findings, prior authorization assessment, or full SOAP note. What would you like to review?`,
+        citedSection: "Assistant Guidance",
+      };
+      setMessages((prev) => [...prev, welcomeMsg]);
     }
   };
 
@@ -980,6 +1045,49 @@ export default function FloatingRAGAssistant({
                     : "Ask clinical questions about any patient (Alex Morgan, Jordan Lee, Casey Kim)."}
                 </p>
 
+                {/* Quick-Select Patient Buttons if No Patient is Selected */}
+                {!patient && (
+                  <div style={{ marginBottom: "14px", textAlign: "left" }}>
+                    <div style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
+                      Select a patient record to begin:
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      {[
+                        { id: "P001", name: "Alex Morgan", note: "Horizon BCBS PPO • Lumbar Radiculopathy" },
+                        { id: "P002", name: "Jordan Lee", note: "Aetna Open Choice • Conservative Care Needed" },
+                        { id: "P003", name: "Casey Kim", note: "UHC Choice Plus • Eligibility Audit" },
+                      ].map((pt) => (
+                        <button
+                          key={pt.id}
+                          type="button"
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "left",
+                            fontSize: "0.78rem",
+                            color: "var(--text-primary)",
+                            background: "var(--bg-glass)",
+                            border: "1px solid var(--border)",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            transition: "all 0.15s ease",
+                          }}
+                          onClick={() => handleSelectPatientFromAssistant(pt.id)}
+                        >
+                          <div>
+                            <span style={{ fontWeight: 600, color: "var(--accent)" }}>👤 {pt.name}</span>
+                            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "6px" }}>({pt.id})</span>
+                            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "2px" }}>{pt.note}</div>
+                          </div>
+                          <span style={{ fontSize: "0.75rem", color: "var(--accent)", fontWeight: 600 }}>Select →</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Traditional RAG Prompt Suggestion Chips */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {patient && (
@@ -1175,27 +1283,82 @@ export default function FloatingRAGAssistant({
                         {m.content}
                       </div>
 
-                      {/* Traditional RAG Citation / Grounded Evidence Snippet */}
-                      {!isUser && (m.evidence?.length || m.citedSection) && (
+                      {/* Interactive Patient Action Chips inside bubble */}
+                      {!isUser && m.actionChips && m.actionChips.length > 0 && (
                         <div
                           style={{
-                            marginTop: "8px",
-                            paddingTop: "6px",
-                            borderTop: "1px dashed var(--border)",
-                            fontSize: "0.74rem",
-                            color: "var(--text-secondary)",
+                            marginTop: "10px",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "6px",
                           }}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--accent)", fontWeight: 600, marginBottom: "4px" }}>
-                            <span>📎</span>
-                            <span>Retrieved Source: [{m.citedSection || "Medical Record"}]</span>
-                          </div>
-                          {m.evidence && m.evidence.length > 0 && (
-                            <div style={{ background: "var(--bg-card)", padding: "6px 8px", borderRadius: "6px", fontStyle: "italic", borderLeft: "2px solid var(--accent)", color: "var(--text-secondary)" }}>
-                              &ldquo;{m.evidence[0]}&rdquo;
-                            </div>
-                          )}
+                          {m.actionChips.map((chip) => (
+                            <button
+                              key={chip.id}
+                              type="button"
+                              onClick={() => handleSelectPatientFromAssistant(chip.id, m.pendingQuery)}
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "flex-start",
+                                padding: "8px 12px",
+                                borderRadius: "8px",
+                                border: "1px solid var(--border-accent, rgba(56, 189, 248, 0.4))",
+                                background: "var(--bg-glass, rgba(56, 189, 248, 0.08))",
+                                color: "var(--text-primary)",
+                                cursor: "pointer",
+                                textAlign: "left",
+                                transition: "all 0.15s ease",
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.background = "rgba(56, 189, 248, 0.16)";
+                                e.currentTarget.style.borderColor = "var(--accent)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.background = "var(--bg-glass, rgba(56, 189, 248, 0.08))";
+                                e.currentTarget.style.borderColor = "var(--border-accent, rgba(56, 189, 248, 0.4))";
+                              }}
+                            >
+                              <span style={{ fontWeight: 600, fontSize: "0.82rem", color: "var(--accent)" }}>
+                                👤 {chip.label}
+                              </span>
+                              {chip.sublabel && (
+                                <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                                  {chip.sublabel}
+                                </span>
+                              )}
+                            </button>
+                          ))}
                         </div>
+                      )}
+
+                      {/* Traditional RAG Citation / Grounded Evidence Snippet - Suppress for Guidance/Notices/Errors */}
+                      {!isUser &&
+                        m.citedSection &&
+                        m.citedSection !== "Notice" &&
+                        m.citedSection !== "Assistant Guidance" &&
+                        m.citedSection !== "Security Notice" &&
+                        m.citedSection !== "Error" && (
+                          <div
+                            style={{
+                              marginTop: "8px",
+                              paddingTop: "6px",
+                              borderTop: "1px dashed var(--border)",
+                              fontSize: "0.74rem",
+                              color: "var(--text-secondary)",
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px", color: "var(--accent)", fontWeight: 600, marginBottom: "4px" }}>
+                              <span>📎</span>
+                              <span>Retrieved Source: [{m.citedSection || "Medical Record"}]</span>
+                            </div>
+                            {m.evidence && m.evidence.length > 0 && (
+                              <div style={{ background: "var(--bg-card)", padding: "6px 8px", borderRadius: "6px", fontStyle: "italic", borderLeft: "2px solid var(--accent)", color: "var(--text-secondary)" }}>
+                                &ldquo;{m.evidence[0]}&rdquo;
+                              </div>
+                            )}
+                          </div>
                       )}
                     </div>
                   </div>
