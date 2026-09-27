@@ -926,6 +926,39 @@ body::after {
   border: none;
 }
 
+/* ── Audio Equalizer Animation ─────────────────────────────────────────── */
+@keyframes audioWave {
+  0%, 100% {
+    height: 4px;
+    opacity: 0.5;
+  }
+  50% {
+    height: 16px;
+    opacity: 1;
+  }
+}
+
+.audio-equalizer {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  padding: 0 4px;
+}
+
+.audio-equalizer .audio-bar {
+  width: 3px;
+  background: var(--accent);
+  border-radius: 2px;
+  animation: audioWave 1.1s ease-in-out infinite;
+}
+
+.audio-equalizer .audio-bar:nth-child(1) { animation-delay: 0.05s; }
+.audio-equalizer .audio-bar:nth-child(2) { animation-delay: 0.35s; }
+.audio-equalizer .audio-bar:nth-child(3) { animation-delay: 0.20s; }
+.audio-equalizer .audio-bar:nth-child(4) { animation-delay: 0.45s; }
+
+
 /* ── Section Gap ───────────────────────────────────────────────────────── */
 .section-gap {
   margin-top: 24px;

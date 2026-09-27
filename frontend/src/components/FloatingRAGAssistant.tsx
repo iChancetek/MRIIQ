@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { SOAP_PATIENTS, detectPatientInText, type SoapPatientRecord } from "@/lib/soapData";
+import { SOAP_PATIENTS, detectPatientInText, formatSoapSpeechScript, type SoapPatientRecord } from "@/lib/soapData";
 import { querySoapRag, purgePatientMemories, type RagResponse } from "@/lib/api";
 import { speakText, stopSpeech } from "@/lib/speech";
+import { ClinicalScribe } from "@/lib/scribe";
 
 interface Props {
   selectedPatientId?: string;
@@ -92,6 +93,23 @@ export default function FloatingRAGAssistant({
   // Traditional RAG chat messages thread
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const chatScrollRef = useRef<HTMLDivElement>(null);
+
+  // AI Scribe Speech-to-Text (STT via OpenAI Whisper)
+  const [isDictating, setIsDictating] = useState(false);
+  const [isTranscribingAudio, setIsTranscribingAudio] = useState(false);
+  const [dictateError, setDictateError] = useState<string | null>(null);
+  const [dictateSeconds, setDictateSeconds] = useState(0);
+
+  const scribeRef = useRef<ClinicalScribe | null>(null);
+  const dictateTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    scribeRef.current = new ClinicalScribe();
+    return () => {
+      scribeRef.current?.cancel();
+      if (dictateTimerRef.current) clearInterval(dictateTimerRef.current);
+    };
+  }, []);
 
   // Calculate default docked bottom-right position
   const calculateDefaultPosition = () => {
@@ -499,6 +517,74 @@ export default function FloatingRAGAssistant({
     });
   };
 
+  /* ── STT Voice Query (AI Scribe via OpenAI Whisper) ────────────────── */
+  const handleToggleDictate = async () => {
+    setDictateError(null);
+
+    // If currently recording -> Stop and transcribe via Whisper
+    if (isDictating) {
+      if (dictateTimerRef.current) {
+        clearInterval(dictateTimerRef.current);
+        dictateTimerRef.current = null;
+      }
+      setIsDictating(false);
+      setIsTranscribingAudio(true);
+
+      try {
+        const transcribed = await scribeRef.current?.stopAndTranscribe();
+        if (transcribed) {
+          setQuestion((prev) => (prev.trim() ? `${prev.trim()} ${transcribed}` : transcribed));
+          // Proactively execute the voice transcribed query for a seamless voice-first experience
+          executeRagQuery(transcribed);
+        }
+      } catch (err) {
+        setDictateError(err instanceof Error ? err.message : "Whisper dictation failed");
+      } finally {
+        setIsTranscribingAudio(false);
+        setDictateSeconds(0);
+      }
+      return;
+    }
+
+    // Start recording session
+    try {
+      stopSpeech();
+      setIsPlayingId(null);
+      await scribeRef.current?.start();
+      setIsDictating(true);
+      setDictateSeconds(0);
+      dictateTimerRef.current = setInterval(() => {
+        setDictateSeconds((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      setDictateError(err instanceof Error ? err.message : "Could not access microphone");
+      setIsDictating(false);
+    }
+  };
+
+  /* ── Full SOAP Note TTS Narration ──────────────────────────────────── */
+  const handleSpeakFullSoap = () => {
+    if (!patient) return;
+    const fullScript = formatSoapSpeechScript(patient, "all");
+    const fullNoteFormatted = `PHYSICIAN CLINICAL DOCUMENTATION (SOAP FORMAT)\nPatient: ${patient.name} (${patient.id}) | DOS: ${patient.dos}\n\n[S] SUBJECTIVE:\n${patient.subjective.chief_complaint}\n${patient.subjective.hpi}\n\n[O] OBJECTIVE:\nVitals: ${patient.objective.vitals}\nPhysical Exam: ${patient.objective.physical_exam}\nNeurological: ${patient.objective.neuro_exam}\nSLR Test: ${patient.objective.slr_test}\nPhysiotherapy: ${patient.objective.physio_notes}\n\n[A] ASSESSMENT:\nDiagnoses: ${patient.assessment.diagnoses.join(", ")}\nCriteria Met: Pain Duration (${patient.assessment.criteria_pain_duration_met ? "Yes" : "No"}), Physio Trial (${patient.assessment.criteria_physio_met ? "Yes" : "No"})\nRecommendation: ${patient.assessment.recommendation}\n\n[P] PLAN:\nRequested: ${patient.plan.procedure_requested} (${patient.plan.cpt_code})\nOrders: ${patient.plan.orders.join(", ")}\nFollow-up: ${patient.plan.follow_up}`;
+
+    const soapMsg: ChatMessage = {
+      id: `soap-narrated-${Date.now()}`,
+      role: "assistant",
+      content: fullNoteFormatted,
+      citedSection: "Entire SOAP Note",
+      guardrailStatus: "passed",
+      phiMasked: false,
+    };
+    setMessages((prev) => [...prev, soapMsg]);
+
+    speakText(fullScript, {
+      onStart: () => setIsPlayingId(soapMsg.id),
+      onEnd: () => setIsPlayingId(null),
+      onError: () => setIsPlayingId(null),
+    });
+  };
+
   return (
     <>
       {/* ── COLLAPSED LAUNCHER (Draggable with mouse to ANY position on platform) ── */}
@@ -896,6 +982,32 @@ export default function FloatingRAGAssistant({
 
                 {/* Traditional RAG Prompt Suggestion Chips */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {patient && (
+                    <button
+                      type="button"
+                      style={{
+                        padding: "8px 12px",
+                        textAlign: "left",
+                        fontSize: "0.78rem",
+                        color: "var(--accent)",
+                        background: "rgba(56, 189, 248, 0.12)",
+                        border: "1px solid var(--border-accent)",
+                        borderRadius: "8px",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        transition: "all 0.15s ease",
+                        fontWeight: 600,
+                      }}
+                      onClick={handleSpeakFullSoap}
+                      disabled={isQuerying}
+                      id="btn-rag-speak-full-soap"
+                    >
+                      <span>🔊</span>
+                      <span>Listen to Full SOAP Note for {patient.name} (TTS)</span>
+                    </button>
+                  )}
                   {[
                     patient
                       ? `Display the entire SOAP Note for ${patient.name}`
@@ -1113,6 +1225,23 @@ export default function FloatingRAGAssistant({
           </div>
 
           {/* ── QUESTION INPUT FORM ─────────────────────────────────── */}
+          {dictateError && (
+            <div
+              style={{
+                padding: "4px 12px",
+                fontSize: "0.74rem",
+                color: "var(--deny, #ef4444)",
+                background: "rgba(239, 68, 68, 0.08)",
+                borderTop: "1px solid rgba(239, 68, 68, 0.2)",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+              }}
+            >
+              <span>⚠</span>
+              <span>{dictateError}</span>
+            </div>
+          )}
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -1121,30 +1250,92 @@ export default function FloatingRAGAssistant({
             style={{
               padding: "10px 12px",
               display: "flex",
+              alignItems: "center",
               gap: "8px",
               background: "var(--header-bg)",
               borderTop: "1px solid var(--border)",
             }}
           >
+            {/* STT Dictation button (OpenAI Whisper AI Scribe) */}
+            <button
+              type="button"
+              className="btn btn-ghost"
+              style={{
+                padding: "8px 10px",
+                fontSize: "0.85rem",
+                borderRadius: "8px",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                background: isDictating
+                  ? "rgba(239, 68, 68, 0.12)"
+                  : isTranscribingAudio
+                  ? "rgba(59, 130, 246, 0.12)"
+                  : undefined,
+                border: isDictating
+                  ? "1px solid rgba(239, 68, 68, 0.4)"
+                  : "1px solid var(--border)",
+                color: isDictating ? "var(--deny, #ef4444)" : "var(--text-secondary)",
+                fontWeight: 600,
+                flexShrink: 0,
+              }}
+              onClick={handleToggleDictate}
+              disabled={isTranscribingAudio || isQuerying}
+              title={
+                isDictating
+                  ? "Click to stop recording and transcribe question via OpenAI Whisper"
+                  : "Dictate question hands-free with OpenAI Whisper (AI Scribe)"
+              }
+              id="btn-rag-voice-query"
+            >
+              {isTranscribingAudio ? (
+                <>
+                  <span className="spinner" style={{ width: 12, height: 12, borderWidth: 2 }} />
+                  <span style={{ fontSize: "0.72rem" }}>Transcribing...</span>
+                </>
+              ) : isDictating ? (
+                <>
+                  <span
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: "50%",
+                      background: "#ef4444",
+                      boxShadow: "0 0 8px #ef4444",
+                    }}
+                  />
+                  <span style={{ fontSize: "0.72rem" }}>Stop ({dictateSeconds}s)</span>
+                </>
+              ) : (
+                <>
+                  <span>🎙️</span>
+                </>
+              )}
+            </button>
+
             <input
               type="text"
               className="form-input"
               style={{ padding: "8px 12px", fontSize: "0.85rem", flex: 1, borderRadius: "8px" }}
               placeholder={
-                patient
+                isDictating
+                  ? "Listening to clinical question... Speak clearly"
+                  : isTranscribingAudio
+                  ? "Transcribing via OpenAI Whisper..."
+                  : patient
                   ? `Ask about ${patient.name}'s notes (e.g. SLR, physio, symptoms)...`
                   : "Ask a clinical question (e.g. Alex Morgan SLR findings)..."
               }
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              disabled={isQuerying}
+              disabled={isQuerying || isTranscribingAudio}
               id="floating-rag-input"
             />
             <button
               type="submit"
               className="btn btn-primary"
-              style={{ padding: "8px 16px", fontSize: "0.85rem", borderRadius: "8px" }}
-              disabled={!question.trim() || isQuerying}
+              style={{ padding: "8px 16px", fontSize: "0.85rem", borderRadius: "8px", flexShrink: 0 }}
+              disabled={!question.trim() || isQuerying || isDictating || isTranscribingAudio}
               id="btn-floating-ask"
             >
               Ask

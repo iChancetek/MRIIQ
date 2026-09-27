@@ -32,3 +32,21 @@ def speak_recommendation(recommendation: str, denial_reasons: list[str]) -> byte
         input=text,
     )
     return response.content
+
+
+def speak_text(text: str) -> bytes:
+    """
+    Convert arbitrary text (e.g. SOAP clinical note or RAG answer) to speech.
+    Returns raw MP3 bytes.
+    """
+    clean_text = text.replace("*", "").replace("_", "").replace("#", "").strip()
+    if not clean_text:
+        clean_text = "No content provided for speech synthesis."
+
+    response = _client.audio.speech.create(
+        model=OPENAI_TTS_MODEL,
+        voice=OPENAI_TTS_VOICE,
+        input=clean_text[:4096],
+    )
+    return response.content
+

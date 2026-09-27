@@ -5,7 +5,7 @@ All OpenAI API calls happen server-side. The frontend never receives OPENAI_API_
 import uuid
 import base64
 from pathlib import Path
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -15,7 +15,8 @@ from backend.app.models.extraction import (
     RagRequest, RagResponse,
 )
 from backend.app.graph.workflow import workflow_graph, rag_graph
-from backend.app.agents.tts import speak_recommendation
+from backend.app.agents.tts import speak_recommendation, speak_text
+from backend.app.agents.stt import transcribe_audio
 from backend.app.agents.rag import query_clinical_rag
 
 app = FastAPI(
@@ -103,14 +104,31 @@ def review(req: ReviewRequest):
 
 
 @app.post("/api/tts")
-def text_to_speech(recommendation: str, denial_reasons: list[str] = None):
+def text_to_speech(recommendation: str = None, denial_reasons: list[str] = None, text: str = None):
     """
-    Optional TTS endpoint — returns MP3 audio of the recommendation.
+    TTS endpoint — returns MP3 audio.
+    Supports arbitrary clinical text (e.g. SOAP notes, RAG answers) or prior-auth recommendation.
     Accessibility feature only; does not change the authorization decision.
     """
-    denial_reasons = denial_reasons or []
-    audio_bytes = speak_recommendation(recommendation, denial_reasons)
+    if text:
+        audio_bytes = speak_text(text)
+    else:
+        rec = recommendation or "APPROVE"
+        reasons = denial_reasons or []
+        audio_bytes = speak_recommendation(rec, reasons)
     return Response(content=audio_bytes, media_type="audio/mpeg")
+
+
+@app.post("/api/stt")
+async def speech_to_text(audio: UploadFile = File(...)):
+    """
+    STT endpoint — transcribes clinical audio using OpenAI Whisper (whisper-1).
+    Primed with clinical vocabulary for SOAP notes, SLR test, radiculopathy, etc.
+    """
+    audio_bytes = await audio.read()
+    filename = audio.filename or "recording.webm"
+    text = transcribe_audio(audio_bytes, filename=filename)
+    return {"text": text, "model": "whisper-1"}
 
 
 from backend.app.models.extraction import (

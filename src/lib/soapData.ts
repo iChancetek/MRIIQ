@@ -369,3 +369,52 @@ ${p.plan.follow_up}
 ================================================================================`;
 }
 
+/**
+ * Formats a clean, spoken audio narration script for a patient's SOAP note.
+ * Removes markdown formatting, brackets, and raw punctuation for fluid text-to-speech pronunciation.
+ * Supports narrating the full SOAP note or individual sections ('all', 'subjective', 'objective', 'assessment', 'plan').
+ */
+export function formatSoapSpeechScript(
+  p: SoapPatientRecord,
+  section: "all" | "subjective" | "objective" | "assessment" | "plan" = "all"
+): string {
+  const intro = `Clinical SOAP documentation for patient ${p.name}, record ID ${p.id}. Date of service: ${p.dos}. Attending provider: ${p.provider}.`;
+
+  const subjectiveText = `Subjective Section. Chief complaint: ${p.subjective.chief_complaint}. History of present illness: ${p.subjective.hpi}. Documented pain duration is ${p.subjective.pain_duration_weeks} weeks, rated ${p.subjective.pain_severity_vas}. Functional impact: ${p.subjective.functional_impact}.`;
+
+  const objectiveText = `Objective Section. Vital signs: ${p.objective.vitals}. Physical examination: ${p.objective.physical_exam}. Neurological examination: ${p.objective.neuro_exam}. Straight leg raise test: ${p.objective.slr_test}. Physical therapy trial: ${
+    p.objective.physio_attempted
+      ? `Completed ${p.objective.physio_duration_weeks} weeks of supervised therapy.`
+      : "No physical therapy attempted."
+  } ${p.objective.physio_notes}.`;
+
+  const assessmentText = `Assessment Section. Diagnoses include: ${p.assessment.diagnoses.join(", ")}. Prior authorization criteria evaluation: Health plan active is ${
+    p.assessment.criteria_plan_active ? "Yes" : "No"
+  }. Pain duration requirement met is ${
+    p.assessment.criteria_pain_duration_met ? "Yes" : "No"
+  }. Physiotherapy requirement met is ${
+    p.assessment.criteria_physio_met ? "Yes" : "No"
+  }. Final authorization recommendation is ${p.assessment.recommendation}. ${
+    p.assessment.denial_reasons.length > 0
+      ? `Reasons: ${p.assessment.denial_reasons.join(". ")}.`
+      : "All clinical necessity guidelines are satisfied."
+  }`;
+
+  const planText = `Plan Section. Requested procedure: ${p.plan.procedure_requested}, CPT code ${p.plan.cpt_code}. Clinical orders: ${p.plan.orders.join(". ")}. Medications: ${p.plan.medications.join(", ")}. Follow up: ${p.plan.follow_up}.`;
+
+  switch (section) {
+    case "subjective":
+      return `${intro} ${subjectiveText}`;
+    case "objective":
+      return `${intro} ${objectiveText}`;
+    case "assessment":
+      return `${intro} ${assessmentText}`;
+    case "plan":
+      return `${intro} ${planText}`;
+    case "all":
+    default:
+      return `${intro} ${subjectiveText} ${objectiveText} ${assessmentText} ${planText}`;
+  }
+}
+
+
