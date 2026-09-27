@@ -136,27 +136,7 @@ export default function Home() {
       <header className="app-header">
         <div className="header-brand-wrap">
           <div className="app-logo-card" title="MRI IQ — Autonomous Prior Authorization Intelligence">
-            <svg
-              viewBox="0 0 36 36"
-              width="26"
-              height="26"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-              style={{ display: "block", color: "#ffffff" }}
-              aria-label="MRI IQ Official Logo"
-            >
-              {/* Outer Circular Gantry Magnet */}
-              <circle cx="18" cy="17" r="13" stroke="currentColor" strokeWidth="2.4" opacity="0.95" />
-              {/* Magnetic Resonance Wave Rings */}
-              <circle cx="18" cy="17" r="9.5" stroke="#a5f3fc" strokeWidth="1.2" strokeDasharray="3 2" opacity="0.85" />
-              {/* Central Scanning Bore */}
-              <circle cx="18" cy="17" r="5.5" fill="rgba(11, 17, 32, 0.45)" stroke="#e0e7ff" strokeWidth="1.4" />
-              {/* Patient Scanning Table / Bed */}
-              <rect x="5.5" y="15.5" width="25" height="3" rx="1.5" fill="currentColor" />
-              <rect x="11.5" y="14" width="9" height="1.8" rx="0.9" fill="#38bdf8" />
-              {/* Scanner Base Support */}
-              <path d="M12 28.5h12v2.5a2 2 0 0 1-2 2h-8a2 2 0 0 1-2-2v-2.5z" fill="currentColor" opacity="0.9" />
-            </svg>
+            <span style={{ fontSize: "1.3rem", lineHeight: 1 }}>🩺</span>
           </div>
           <div>
             <div className="app-logo">
