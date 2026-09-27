@@ -28,9 +28,10 @@ The core design principle is:
 | **Data Security & Privacy** | **HIPAA Safe Harbor (§ 164.514(b)) PHI Vault**, **GDPR (Art. 9 & 17)** Erasure, **OWASP LLM01** Scope Guardrails, Immutable Audit Logging (§ 164.312(b)) |
 | **Progressive Web App (PWA)** | Web App Manifest (`manifest.json`), Service Worker (`sw.js`), Apple Touch & Maskable Icons, Offline Shell |
 | **Speech Engine (STT & TTS)** | **OpenAI Whisper STT (`whisper-1`)** AI Scribe for clinical note dictation & voice RAG queries; **OpenAI TTS (`tts-1-hd` / `onyx`)** for SOAP note audio narration & section playback with Web Speech fallback |
+| **Memory Architecture** | **Dual-Memory System** — Short-Term Conversational Memory (sliding dialogue turns with PHI tokenization) & Persistent Long-Term Memory Bank (cross-session patient clinical history & GDPR Article 17 erasure) |
 | **Cloud & Hosting** | **Firebase App Hosting** (`quantiq221` / `mriiq` / `us-east4`), Google Cloud, custom domain `mriiq.fit` |
-
 | **Document Generation** | [ReportLab](https://www.reportlab.com/) synthetic clinical PDF generator (Formal SOAP Notes format) |
+
 
 ---
 
@@ -364,8 +365,87 @@ Guardrail Status: passed | PHI Masked: True | Compliance: Active
 
 ---
 
+## 🧠 Dual-Memory Architecture (Short-Term & Long-Term Memory)
+
+MRIIQ employs a **Dual-Memory System** to support natural, stateful clinical consultations while safeguarding sensitive patient context:
+
+```mermaid
+flowchart TD
+    UserQuery["Clinician Inquiry / Voice Dictation"] --> ScopeCheck{"3-Patient Scope Guardrail\n(P001, P002, P003)"}
+    ScopeCheck -->|Passed| MemoryCoordinator["Memory Coordinator Engine"]
+    
+    subgraph DualMemorySubsystem ["Dual-Memory Subsystem"]
+        STM["Short-Term Memory\n(Active Session Turns: 6-8 depth)"]
+        LTM["Long-Term Memory Bank\n(Persistent patient_memories.json & localStorage)"]
+    end
+    
+    MemoryCoordinator --> STM
+    MemoryCoordinator --> LTM
+    
+    STM --> Aggregator["Context Aggregator\n(SOAP Record + LTM Context + Short-Term Turns)"]
+    LTM --> Aggregator
+    
+    Aggregator --> PHIVault["HIPAA Safe Harbor PHI Masking Vault\n(De-identification § 164.514(b))"]
+    PHIVault --> LLM["OpenAI gpt-5.6-terra Reasoning\n(Zero Exposed PHI)"]
+    LLM --> Egress["Egress Detokenization Vault"]
+    Egress --> AuditLog["HIPAA § 164.312(b) Audit Logger"]
+    AuditLog --> UIResponse["Clinician Response / Spoken Narration"]
+
+    classDef memBox fill:#0f172a,stroke:#38bdf8,stroke-width:2px;
+    class STM,LTM,MemoryCoordinator memBox;
+```
+
+### 1. Short-Term Conversational Memory
+* **Functionality**: Tracks the immediate multi-turn conversational dialogue within the active consultation session.
+* **Turn Sliding Window**: Slices the most recent **6–8 conversation turns** (`shortTermHistory`) from [`FloatingRAGAssistant.tsx`](src/components/FloatingRAGAssistant.tsx) and transmits them to `/api/rag`.
+* **Co-reference Resolution**: Enables clinicians to ask follow-up questions referencing previous turns without repeating the full context (e.g. asking *"Does that duration satisfy payer policy?"* resolves *"that"* to the 10-week pain duration established in the prior turn).
+* **Safe Harbor Integration**: Every conversational turn is stripped of the 18 HIPAA Safe Harbor identifiers before being submitted to the reasoning model.
+* **Audit Tracking**: Each response payload includes `short_term_turns_count` verifying dialogue depth.
+
+### 2. Long-Term Persistent Memory Bank
+* **Functionality**: Preserves longitudinal patient preferences, prior clinical alerts, historical imaging results, and therapy compliance records across browser reloads and multiple sessions.
+* **Default Seed Memories per Patient**:
+  * **Alex Morgan (`P001`)**:
+    * *Patient preference*: Prioritizes conservative therapies and non-invasive interventions before spine surgery.
+    * *Historical Imaging*: Prior lumbar X-ray in 2024 revealed mild disc space narrowing at L5-S1.
+    * *Physiotherapy Compliance*: Attended all 16 scheduled sessions (8 weeks) at Apex Physical Therapy without gaps.
+    * *Verified active coverage* under Horizon Blue Cross PPO with zero prior authorization denials on file.
+  * **Jordan Lee (`P002`)**:
+    * *Patient history*: Axial back pain exacerbated by heavy lifting during residential construction projects.
+    * *Clinical Preference*: Self-managed with OTC Ibuprofen 400mg; previously declined formal physiotherapy referral.
+    * *Care Plan Alert*: Patient requires formal counseling on payer-mandated 6-week conservative physiotherapy before MRI approval.
+  * **Casey Kim (`P003`)**:
+    * *Eligibility Note*: Employer change resulted in policy lapse; UnitedHealthcare coverage terminated on 08/31/2026.
+    * *Financial Counseling*: Patient referred to clinic benefits coordinator for health insurance exchange enrollment.
+    * *Clinical Plan*: Physician recommends initiating structured physical therapy immediately once coverage is reinstated.
+* **Dual Persistence Layer**:
+  * **Client-Side**: Cached in `localStorage` under key `"mriiq_patient_memories"` for instant zero-latency retrieval.
+  * **Server-Side**: Stored in [`data/patient_memories.json`](data/patient_memories.json) and managed by [`backend/app/agents/rag.py`](backend/app/agents/rag.py).
+
+### 3. GDPR Article 17 (Right to Erasure) & Memory Purge
+* **One-Click Erasure**: Clinicians can wipe persistent patient memories with a single click using the **`🗑️ Erase Memory`** control in the assistant window.
+* **Compliance Enforcement**: Calls `DELETE /api/rag/memories`, purging the patient's record from both runtime memory and disk.
+* **Immutable Audit Trail**: Logs a structured compliance audit event tagged `GDPR_ERASURE` with timestamps conforming to 45 CFR § 164.312(b) and GDPR Article 30.
+
+### 4. Memory Verification & Test Suite
+Run the automated test to verify both Short-Term and Long-Term Memory systems:
+```bash
+python -c "
+from backend.app.agents.rag import query_clinical_rag, load_long_term_memories
+print('LTM Count:', len(load_long_term_memories('P001')))
+res = query_clinical_rag('P001', 'Does that duration satisfy requirements?', short_term_history=[{'role': 'user', 'content': 'Pain duration is 10 weeks.'}])
+print('STM Turn Count:', res.short_term_turns_count, '| Answer snippet:', res.answer[:80])
+"
+```
+```text
+LTM Count: 4
+STM Turn Count: 1 | Answer snippet: Subjective documentation: Chief Complaint is severe lower back pain with right L5...
+```
+
+---
 
 ## 🎙️ AI Clinical Scribe: OpenAI Speech-to-Text (STT) & Text-to-Speech (TTS)
+
 
 MRIIQ features a bidirectional, voice-first clinical interaction engine powered by **OpenAI Whisper (`whisper-1`)** and **OpenAI TTS (`tts-1-hd` / `onyx`)** with automatic browser **Web Speech API (`window.speechSynthesis`)** fallback:
 
