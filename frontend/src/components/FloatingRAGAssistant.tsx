@@ -1045,49 +1045,6 @@ export default function FloatingRAGAssistant({
                     : "Ask clinical questions about any patient (Alex Morgan, Jordan Lee, Casey Kim)."}
                 </p>
 
-                {/* Quick-Select Patient Buttons if No Patient is Selected */}
-                {!patient && (
-                  <div style={{ marginBottom: "14px", textAlign: "left" }}>
-                    <div style={{ fontSize: "0.76rem", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>
-                      Select a patient record to begin:
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                      {[
-                        { id: "P001", name: "Alex Morgan", note: "Horizon BCBS PPO • Lumbar Radiculopathy" },
-                        { id: "P002", name: "Jordan Lee", note: "Aetna Open Choice • Conservative Care Needed" },
-                        { id: "P003", name: "Casey Kim", note: "UHC Choice Plus • Eligibility Audit" },
-                      ].map((pt) => (
-                        <button
-                          key={pt.id}
-                          type="button"
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "left",
-                            fontSize: "0.78rem",
-                            color: "var(--text-primary)",
-                            background: "var(--bg-glass)",
-                            border: "1px solid var(--border)",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                            transition: "all 0.15s ease",
-                          }}
-                          onClick={() => handleSelectPatientFromAssistant(pt.id)}
-                        >
-                          <div>
-                            <span style={{ fontWeight: 600, color: "var(--accent)" }}>👤 {pt.name}</span>
-                            <span style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "6px" }}>({pt.id})</span>
-                            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "2px" }}>{pt.note}</div>
-                          </div>
-                          <span style={{ fontSize: "0.75rem", color: "var(--accent)", fontWeight: 600 }}>Select →</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Traditional RAG Prompt Suggestion Chips */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                   {patient && (
