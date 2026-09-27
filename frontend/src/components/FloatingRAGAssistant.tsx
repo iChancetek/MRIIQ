@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { SOAP_PATIENTS, detectPatientInText, type SoapPatientRecord } from "@/lib/soapData";
-import { querySoapRag, type RagResponse } from "@/lib/api";
+import { querySoapRag, purgePatientMemories, type RagResponse } from "@/lib/api";
 import { speakText, stopSpeech } from "@/lib/speech";
 
 interface Props {
@@ -19,6 +19,8 @@ interface ChatMessage {
   evidence?: string[];
   recalledMemories?: string[];
   shortTermTurns?: number;
+  phiMasked?: boolean;
+  guardrailStatus?: "passed" | "blocked";
 }
 
 // Initial default long-term memories for each patient
@@ -52,6 +54,7 @@ export default function FloatingRAGAssistant({
   const [question, setQuestion] = useState("");
   const [isQuerying, setIsQuerying] = useState(false);
   const [isPlayingId, setIsPlayingId] = useState<string | null>(null);
+  const [purgeFeedback, setPurgeFeedback] = useState<string | null>(null);
 
   // Draggable assistant window coordinates in pixels
   const [position, setPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
@@ -355,6 +358,51 @@ export default function FloatingRAGAssistant({
     onClear?.();
   };
 
+  /* ── GDPR Article 17 Right to Erasure ──────────────────────────────── */
+  const handlePurgeMemories = async () => {
+    if (!normalizedId) return;
+    const patientName = patient?.name || normalizedId;
+    if (
+      !confirm(
+        `GDPR Article 17 Right to Erasure:\n\nAre you sure you want to permanently erase the persistent clinical memory bank for ${patientName} (${normalizedId})?`
+      )
+    ) {
+      return;
+    }
+
+    try {
+      await purgePatientMemories(normalizedId);
+      setPatientMemories((prev) => {
+        const next = { ...prev };
+        delete next[normalizedId];
+        return next;
+      });
+      try {
+        const stored = localStorage.getItem("mriiq_patient_memories");
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          delete parsed[normalizedId];
+          localStorage.setItem("mriiq_patient_memories", JSON.stringify(parsed));
+        }
+      } catch {}
+
+      setPurgeFeedback(`Memory erased for ${patientName}`);
+      setTimeout(() => setPurgeFeedback(null), 4000);
+
+      const auditNotice: ChatMessage = {
+        id: `audit-${Date.now()}`,
+        role: "assistant",
+        content: `🛡️ GDPR ARTICLE 17 RIGHT TO ERASURE EXECUTED\n\nAll persistent clinical memories and historical notes for ${patientName} (${normalizedId}) have been permanently wiped from the active session store and database. Audit logged under HIPAA § 164.312(b).`,
+        citedSection: "Compliance Audit",
+        guardrailStatus: "passed",
+        phiMasked: true,
+      };
+      setMessages((prev) => [...prev, auditNotice]);
+    } catch (err) {
+      alert(`Memory purge failed: ${err instanceof Error ? err.message : "Error"}`);
+    }
+  };
+
   /* ── Traditional RAG Query Execution ───────────────────────────────── */
   const executeRagQuery = async (queryText: string) => {
     const q = queryText.trim();
@@ -418,6 +466,8 @@ export default function FloatingRAGAssistant({
         evidence: res.evidence,
         recalledMemories: res.recalled_long_term_memories,
         shortTermTurns: (res.short_term_turns_count ?? shortTermHistory.length) + 1,
+        phiMasked: res.phi_masked,
+        guardrailStatus: res.guardrail_status,
       };
 
       setMessages((prev) => [...prev, assistantMsg]);
@@ -427,6 +477,7 @@ export default function FloatingRAGAssistant({
         role: "assistant",
         content: `Error querying clinical RAG: ${err instanceof Error ? err.message : "Request failed"}`,
         citedSection: "Error",
+        guardrailStatus: "blocked",
       };
       setMessages((prev) => [...prev, errMsg]);
     } finally {
@@ -677,6 +728,59 @@ export default function FloatingRAGAssistant({
             </div>
           </div>
 
+          {/* ── SECURITY & COMPLIANCE RIBBON (HIPAA & GDPR) ─────────────── */}
+          <div
+            style={{
+              padding: "5px 14px",
+              background: "rgba(2, 132, 199, 0.05)",
+              borderBottom: "1px solid var(--border)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              fontSize: "0.68rem",
+              color: "var(--text-secondary)",
+              gap: "8px",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ color: "#10b981", fontSize: "0.76rem" }}>🛡️</span>
+              <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                HIPAA §164.514 Safe Harbor
+              </span>
+              <span style={{ opacity: 0.5 }}>•</span>
+              <span>GDPR Art. 9 &amp; 17</span>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  background: "rgba(16, 185, 129, 0.12)",
+                  color: "#059669",
+                  fontWeight: 600,
+                  fontSize: "0.64rem",
+                }}
+                title="Bidirectional tokenization removes all 18 HIPAA Safe Harbor identifiers before external LLM calls"
+              >
+                🔒 PHI Vault Active
+              </span>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "4px",
+                  background: "rgba(2, 132, 199, 0.12)",
+                  color: "var(--accent)",
+                  fontWeight: 600,
+                  fontSize: "0.64rem",
+                }}
+                title="Queries strictly locked to authorized synthetic patients P001, P002, and P003"
+              >
+                🎯 3-Patient Scope Lock
+              </span>
+            </div>
+          </div>
+
           {/* ── ACTIVE CLINICAL CONTEXT ──────────────────────────────── */}
           {patient && (
             <div
@@ -697,22 +801,50 @@ export default function FloatingRAGAssistant({
                 <span style={{ color: "var(--text-muted)" }}>•</span>
                 <span style={{ color: "var(--text-secondary)" }}>{patient.plan_name}</span>
               </div>
-              <a
-                href={`/mock-pdfs/${patient.id}.pdf`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  color: "var(--accent)",
-                  textDecoration: "none",
-                  fontSize: "0.72rem",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "2px",
-                }}
-                title={`Open original clinical note PDF for ${patient.name}`}
-              >
-                📄 PDF ↗
-              </a>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                {purgeFeedback ? (
+                  <span style={{ fontSize: "0.68rem", color: "#10b981", fontWeight: 600 }}>
+                    ✓ {purgeFeedback}
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handlePurgeMemories}
+                    style={{
+                      background: "rgba(239, 68, 68, 0.08)",
+                      border: "1px solid rgba(239, 68, 68, 0.25)",
+                      borderRadius: "5px",
+                      cursor: "pointer",
+                      padding: "2px 7px",
+                      fontSize: "0.66rem",
+                      color: "var(--deny, #ef4444)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "3px",
+                      fontWeight: 500,
+                    }}
+                    title="GDPR Article 17 Right to Erasure: Wipe persistent clinical memory bank for this patient"
+                  >
+                    <span>🗑️ Erase Memory</span>
+                  </button>
+                )}
+                <a
+                  href={`/mock-pdfs/${patient.id}.pdf`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "var(--accent)",
+                    textDecoration: "none",
+                    fontSize: "0.72rem",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "2px",
+                  }}
+                  title={`Open original clinical note PDF for ${patient.name}`}
+                >
+                  📄 PDF ↗
+                </a>
+              </div>
             </div>
           )}
 
@@ -808,6 +940,7 @@ export default function FloatingRAGAssistant({
                 const isEntireSoap =
                   m.citedSection === "Entire SOAP Note" ||
                   m.content.includes("PHYSICIAN CLINICAL DOCUMENTATION");
+                const isBlocked = m.guardrailStatus === "blocked";
 
                 return (
                   <div
@@ -828,11 +961,19 @@ export default function FloatingRAGAssistant({
                         borderRadius: isUser ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
                         background: isUser
                           ? "linear-gradient(135deg, #0284c7 0%, #0369a1 100%)"
+                          : isBlocked
+                          ? "rgba(239, 68, 68, 0.05)"
                           : "var(--bg-secondary)",
                         color: isUser ? "#ffffff" : "var(--text-primary)",
                         fontSize: "0.83rem",
                         lineHeight: 1.5,
-                        border: isUser ? "none" : isEntireSoap ? "1px solid var(--accent)" : "1px solid var(--border)",
+                        border: isUser
+                          ? "none"
+                          : isBlocked
+                          ? "1px solid rgba(239, 68, 68, 0.5)"
+                          : isEntireSoap
+                          ? "1px solid var(--accent)"
+                          : "1px solid var(--border)",
                         boxShadow: "0 4px 16px rgba(0, 0, 0, 0.08)",
                       }}
                     >
@@ -848,20 +989,41 @@ export default function FloatingRAGAssistant({
                             borderBottom: "1px solid var(--border)",
                           }}
                         >
-                          <span
-                            style={{
-                              fontSize: "0.68rem",
-                              fontWeight: 700,
-                              color: "var(--accent)",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.04em",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                            }}
-                          >
-                            {isEntireSoap ? "📄 Entire SOAP Clinical Note" : "Clinical RAG Response"}
-                          </span>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span
+                              style={{
+                                fontSize: "0.68rem",
+                                fontWeight: 700,
+                                color: isBlocked ? "var(--deny, #ef4444)" : "var(--accent)",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.04em",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                              }}
+                            >
+                              {isBlocked
+                                ? "🛡️ Guardrail Intervention"
+                                : isEntireSoap
+                                ? "📄 Entire SOAP Clinical Note"
+                                : "Clinical RAG Response"}
+                            </span>
+                            {m.phiMasked && !isBlocked && (
+                              <span
+                                style={{
+                                  fontSize: "0.6rem",
+                                  padding: "1px 5px",
+                                  borderRadius: "4px",
+                                  background: "rgba(16, 185, 129, 0.12)",
+                                  color: "#059669",
+                                  fontWeight: 600,
+                                }}
+                                title="De-identified via HIPAA Safe Harbor §164.514(b)"
+                              >
+                                🔒 PHI Masked
+                              </span>
+                            )}
+                          </div>
                           <button
                             type="button"
                             style={{

@@ -41,6 +41,24 @@ export interface RagResponse {
   short_term_turns_count?: number;
   model_used?: string;
   error?: string;
+  phi_masked?: boolean;
+  guardrail_status?: "passed" | "blocked";
+  compliance?: {
+    hipaa_safe_harbor: boolean;
+    gdpr_article_17: boolean;
+    audit_logged: boolean;
+  };
+}
+
+export interface PurgeMemoryResponse {
+  success: boolean;
+  patient_id: string;
+  message: string;
+  timestamp?: string;
+  compliance?: {
+    gdpr_article_17: boolean;
+    audit_logged: boolean;
+  };
 }
 
 /* ── API calls ───────────────────────────────────────────────────────────── */
@@ -108,6 +126,19 @@ export async function querySoapRag(
   if (!res.ok) {
     const errorText = await res.text();
     throw new Error(`RAG query failed (${res.status}): ${errorText}`);
+  }
+  return res.json();
+}
+
+export async function purgePatientMemories(
+  patientId: string,
+): Promise<PurgeMemoryResponse> {
+  const res = await fetch(`${BASE}/api/rag/memories?patient_id=${encodeURIComponent(patientId)}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`Purge memories failed (${res.status}): ${errorText}`);
   }
   return res.json();
 }

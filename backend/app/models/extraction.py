@@ -2,7 +2,7 @@
 Pydantic models used across the application.
 """
 from typing import Optional, List, Dict, Any
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ClinicalExtraction(BaseModel):
@@ -49,7 +49,7 @@ class RagRequest(BaseModel):
 
 
 class RagResponse(BaseModel):
-    """Backend → Frontend: RAG answer grounded in SOAP notes with dual memory."""
+    """Backend → Frontend: RAG answer grounded in SOAP notes with dual memory & security."""
     patient_id: str
     patient_name: str
     question: str
@@ -59,6 +59,15 @@ class RagResponse(BaseModel):
     recalled_long_term_memories: List[str] = []
     short_term_turns_count: int = 0
     model_used: str = "gpt-5.6-terra"
+    phi_masked: bool = True
+    guardrail_status: str = "passed"  # "passed" | "blocked"
+    compliance: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "hipaa_safe_harbor": True,
+            "gdpr_article_17": True,
+            "audit_logged": True,
+        }
+    )
 
 
 class MemoryUpdateRequest(BaseModel):
@@ -71,3 +80,17 @@ class MemoryListResponse(BaseModel):
     """Backend → Frontend: retrieve long-term memories for a patient."""
     patient_id: str
     memories: List[str]
+
+
+class PurgeMemoryResponse(BaseModel):
+    """Backend → Frontend: response after purging patient memories under GDPR Article 17."""
+    success: bool = True
+    patient_id: str
+    message: str
+    timestamp: str
+    compliance: Dict[str, Any] = Field(
+        default_factory=lambda: {
+            "gdpr_article_17": True,
+            "audit_logged": True,
+        }
+    )

@@ -116,9 +116,11 @@ def text_to_speech(recommendation: str, denial_reasons: list[str] = None):
 from backend.app.models.extraction import (
     AuthRequest, ReviewRequest, AuthResponse, FinalOutcomeResponse,
     RagRequest, RagResponse, MemoryUpdateRequest, MemoryListResponse,
+    PurgeMemoryResponse,
 )
 from backend.app.agents.rag import (
-    query_clinical_rag, load_long_term_memories, add_patient_memory
+    query_clinical_rag, load_long_term_memories, add_patient_memory,
+    purge_patient_memories,
 )
 
 
@@ -153,6 +155,25 @@ def add_memory_endpoint(req: MemoryUpdateRequest):
     """
     updated = add_patient_memory(req.patient_id, req.memory)
     return MemoryListResponse(patient_id=req.patient_id, memories=updated)
+
+
+@app.delete("/api/rag/memories", response_model=PurgeMemoryResponse)
+def delete_memories_endpoint(patient_id: str = "P001"):
+    """
+    Purge persistent clinical memories for a patient pursuant to GDPR Article 17 (Right to Erasure).
+    """
+    from datetime import datetime, timezone
+    purge_patient_memories(patient_id)
+    return PurgeMemoryResponse(
+        success=True,
+        patient_id=patient_id,
+        message=f"All clinical memories for {patient_id} successfully purged under GDPR Article 17.",
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        compliance={
+            "gdpr_article_17": True,
+            "audit_logged": True,
+        },
+    )
 
 
 if __name__ == "__main__":

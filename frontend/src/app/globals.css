@@ -986,11 +986,13 @@ body::after {
 
 /* ── App Footer ────────────────────────────────────────────────────────── */
 .app-footer {
-  margin-top: 20px;
+  margin-top: 24px;
   padding: 16px 0 36px;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 12px;
   text-align: center;
 }
 
@@ -1021,6 +1023,57 @@ body::after {
 .footer-tech {
   color: var(--text-muted);
   font-size: 0.75rem;
+}
+
+.app-footer-compliance {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  max-width: 980px;
+  padding: 0 12px;
+}
+
+.footer-compliance-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 14px;
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(8px);
+  transition: all 0.2s ease;
+}
+
+.footer-compliance-pill:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  box-shadow: 0 0 14px var(--accent-glow);
+}
+
+.footer-compliance-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  flex-shrink: 0;
+}
+
+.footer-compliance-title {
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+
+.footer-compliance-desc {
+  color: var(--text-muted);
+  font-size: 0.72rem;
 }
 
 /* ── Patient Identification Card & Quick Pick ────────────────────────── */

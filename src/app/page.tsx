@@ -430,6 +430,19 @@ export default function Home() {
               Prior Authorization Intelligence Platform
             </span>
           </div>
+
+          <div className="app-footer-compliance">
+            <div className="footer-compliance-pill" title="18 HIPAA Safe Harbor identifiers masked before transmission to external LLMs">
+              <span className="footer-compliance-dot" />
+              <span className="footer-compliance-title">PHI/PII Masking Vault:</span>
+              <span className="footer-compliance-desc">Safe Harbor §164.514(b) Bidirectional De-identification</span>
+            </div>
+            <div className="footer-compliance-pill" title="Audit controls under 45 CFR §164.312(b) and GDPR Article 9 & 17">
+              <span className="footer-compliance-dot" />
+              <span className="footer-compliance-title">HIPAA &amp; GDPR Compliance:</span>
+              <span className="footer-compliance-desc">§164.312(b) Audit Logging • Art. 9 &amp; 17 Right to Erasure • 3-Patient Scope Lock</span>
+            </div>
+          </div>
         </footer>
       </main>
 

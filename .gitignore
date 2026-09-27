@@ -44,3 +44,8 @@ yarn-error.log*
 Thumbs.db
 .vscode/
 .idea/
+
+# Audit Logs & Generated Data
+data/audit_log.jsonl
+*.jsonl
+*.log

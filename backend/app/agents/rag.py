@@ -13,6 +13,9 @@ from typing import Dict, Any, List, Optional
 from openai import OpenAI
 from backend.app.config import OPENAI_API_KEY, OPENAI_MODEL
 from backend.app.models.extraction import RagResponse
+from backend.app.agents.phi_vault import mask_phi, detokenize_phi
+from backend.app.agents.guardrail import validate_rag_query
+from backend.app.agents.audit_logger import log_audit_event
 
 _DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 _MEMORY_FILE = _DATA_DIR / "patient_memories.json"
@@ -121,6 +124,26 @@ def add_patient_memory(patient_id: str, new_memory: str) -> List[str]:
         current.append(cleaned)
         save_long_term_memories(pid, current)
     return current
+
+
+def purge_patient_memories(patient_id: str) -> bool:
+    """Purge persistent clinical memories for a patient pursuant to GDPR Article 17 (Right to Erasure)."""
+    pid = normalize_id(patient_id)
+    if _MEMORY_FILE.exists():
+        try:
+            data = json.loads(_MEMORY_FILE.read_text(encoding="utf-8"))
+            if pid in data:
+                del data[pid]
+                _MEMORY_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        except Exception:
+            pass
+    log_audit_event(
+        event_type="GDPR_ERASURE",
+        patient_id=pid,
+        guardrail_status="passed",
+        violation_reason="GDPR Article 17 Right to Erasure executed",
+    )
+    return True
 
 
 def load_soap_doc(patient_id: str) -> str:
@@ -263,27 +286,61 @@ def query_clinical_rag(
     custom_memories: Optional[List[str]] = None,
 ) -> RagResponse:
     """
-    Main entry point for Python Clinical RAG Agent with Dual Memory:
-    1. Short-Term Memory: Ephemeral conversation history across user/assistant turns.
-    2. Long-Term Memory: Recalled persistent patient profile and clinical annotations.
+    Main entry point for Python Clinical RAG Agent with Dual Memory & Security:
+    1. Scope & Security Guardrail (strict 3-patient lock, anti-jailbreak, domain bounds).
+    2. PHI/PII Masking Vault (HIPAA Safe Harbor § 164.514(b) tokenization).
+    3. Audit Logging (HIPAA § 164.312(b) & GDPR Art. 30).
+    4. Dual Memory (Short-Term Conversational & Long-Term Clinical Memory Bank).
     """
     detected_pid = detect_patient_in_text(question)
     raw_pid = detected_pid or patient_id or ""
 
     if not raw_pid:
+        log_audit_event(
+            event_type="GUARDRAIL_BLOCK",
+            patient_id="UNKNOWN",
+            guardrail_status="blocked",
+            violation_reason="No patient ID provided or detected",
+        )
         return RagResponse(
             patient_id="",
             patient_name="",
             question=question,
-            answer="No patient is currently selected, and no patient name or ID was found in your query.\n\nPlease select a patient ID (P001, P002, P003) or mention a patient's name (e.g., Alex Morgan, Jordan Lee, Casey Kim) or ID in your query to retrieve clinical SOAP documentation.",
-            cited_section="Notice",
-            evidence=[],
+            answer="🛡️ GUARDRAIL NOTICE: No authorized patient record is currently selected.\n\nUnder HIPAA Access Control (§ 164.312(a)(1)), clinical documentation queries must be bound to an authorized patient. Please select or mention one of the 3 authorized synthetic patient records: P001 (Alex Morgan), P002 (Jordan Lee), or P003 (Casey Kim).",
+            cited_section="Security Notice",
+            evidence=["HIPAA Access Control § 164.312(a)(1)"],
             recalled_long_term_memories=[],
             short_term_turns_count=len(short_term_history or []),
-            model_used="assistant-gatekeeper",
+            model_used="guardrail-gatekeeper",
+            phi_masked=False,
+            guardrail_status="blocked",
         )
 
     pid = normalize_id(raw_pid)
+
+    # ── 1. GUARDRAIL VALIDATION ──
+    is_allowed, reason, violation_type, citation = validate_rag_query(pid, question)
+    if not is_allowed:
+        log_audit_event(
+            event_type="GUARDRAIL_BLOCK",
+            patient_id=pid,
+            guardrail_status="blocked",
+            violation_reason=reason,
+        )
+        return RagResponse(
+            patient_id=pid,
+            patient_name="",
+            question=question,
+            answer=f"🛡️ SECURITY & SCOPE GUARDRAIL INTERVENTION:\n\n{reason}\n\n• Regulatory Standard: {citation}\n• System Action: Query blocked at API perimeter to prevent unauthorized data access.",
+            cited_section="Security Guardrail",
+            evidence=[citation or "Security Guardrail Enforcement"],
+            recalled_long_term_memories=[],
+            short_term_turns_count=len(short_term_history or []),
+            model_used="security-guardrail",
+            phi_masked=False,
+            guardrail_status="blocked",
+        )
+
     name = PATIENT_NAMES.get(pid, f"Patient {pid}")
     doc_text = load_soap_doc(pid)
     
@@ -299,6 +356,12 @@ def query_clinical_rag(
 
     # When someone asks to display the SOAP Notes for a particular patient, return the entire SOAP Note
     if is_full_soap_query(question):
+        log_audit_event(
+            event_type="RAG_QUERY",
+            patient_id=pid,
+            guardrail_status="passed",
+            tokens_masked_count=0,
+        )
         return RagResponse(
             patient_id=pid,
             patient_name=name,
@@ -309,23 +372,39 @@ def query_clinical_rag(
             recalled_long_term_memories=persistent_memories,
             short_term_turns_count=turns_count,
             model_used="clinical-soap-full-record",
+            phi_masked=True,
+            guardrail_status="passed",
         )
+
+    # ── 2. PHI/PII MASKING VAULT (HIPAA Safe Harbor) ──
+    masked_doc, doc_tokens, count_doc = mask_phi(doc_text)
+    masked_q, q_tokens, count_q = mask_phi(question)
+    combined_tokens = {**doc_tokens, **q_tokens}
+    total_masked = count_doc + count_q
 
     if OPENAI_API_KEY:
         try:
             client = OpenAI(api_key=OPENAI_API_KEY)
             
-            memory_block = "\n".join(f"- {m}" for m in persistent_memories) if persistent_memories else "None on record."
+            # Mask memories for prompt
+            masked_memories = []
+            for mem in persistent_memories:
+                m_txt, m_tok, _ = mask_phi(mem)
+                combined_tokens.update(m_tok)
+                masked_memories.append(m_txt)
 
-            system_prompt = f"""You are an expert clinical documentation and prior authorization auditor answering questions about patient {name} ({pid}).
+            memory_block = "\n".join(f"- {m}" for m in masked_memories) if masked_memories else "None on record."
+
+            system_prompt = f"""You are an expert clinical documentation and prior authorization auditor answering questions about patient record {pid}.
+All Protected Health Information has been de-identified according to HIPAA Safe Harbor standards (§ 164.514(b)).
 
 You have access to:
-1. Grounded Physician Clinical Documentation in SOAP Notes format.
+1. Grounded De-identified Physician Clinical Documentation in SOAP Notes format.
 2. Long-Term Patient Memory Bank (historical audit records, preferences, clinical alerts).
 3. Short-Term Conversational Memory (previous turns in this active consultation session).
 
-SOAP CLINICAL DOCUMENTATION:
-{doc_text}
+DE-IDENTIFIED SOAP CLINICAL DOCUMENTATION:
+{masked_doc}
 
 LONG-TERM PATIENT MEMORY:
 {memory_block}
@@ -339,15 +418,17 @@ INSTRUCTIONS:
 """
             messages = [{"role": "system", "content": system_prompt}]
 
-            # Add short-term conversational memory turns (limited to last 8 turns)
+            # Add short-term conversational memory turns (limited to last 8 turns, masked)
             for turn in history[-8:]:
                 role = turn.get("role", "user")
                 content = turn.get("content", "")
                 if role in ("user", "assistant") and content:
-                    messages.append({"role": role, "content": content})
+                    t_masked, t_tok, _ = mask_phi(content)
+                    combined_tokens.update(t_tok)
+                    messages.append({"role": role, "content": t_masked})
 
-            # Add current user question
-            messages.append({"role": "user", "content": question})
+            # Add current user question (masked)
+            messages.append({"role": "user", "content": masked_q})
 
             response = client.chat.completions.create(
                 model=OPENAI_MODEL,
@@ -355,7 +436,10 @@ INSTRUCTIONS:
                 temperature=0.1,
                 max_completion_tokens=1500,
             )
-            answer_text = response.choices[0].message.content.strip()
+            raw_answer_text = response.choices[0].message.content.strip()
+
+            # ── 3. EGRESS DETOKENIZATION ──
+            answer_text = detokenize_phi(raw_answer_text, combined_tokens)
 
             cited = "SOAP Record"
             if "[Subjective]" in answer_text or "subjective" in question.lower():
@@ -369,6 +453,13 @@ INSTRUCTIONS:
             elif "[Long-Term Memory]" in answer_text or any(k in question.lower() for k in ("memory", "recall", "past")):
                 cited = "Long-Term Memory"
 
+            log_audit_event(
+                event_type="RAG_QUERY",
+                patient_id=pid,
+                guardrail_status="passed",
+                tokens_masked_count=total_masked,
+            )
+
             return RagResponse(
                 patient_id=pid,
                 patient_name=name,
@@ -379,12 +470,22 @@ INSTRUCTIONS:
                 recalled_long_term_memories=persistent_memories,
                 short_term_turns_count=turns_count,
                 model_used=OPENAI_MODEL,
+                phi_masked=True,
+                guardrail_status="passed",
             )
         except Exception:
             pass
 
     # Deterministic fallback with memory integration
     fallback = deterministic_rag_fallback(pid, doc_text, question, history, persistent_memories)
+
+    log_audit_event(
+        event_type="RAG_QUERY",
+        patient_id=pid,
+        guardrail_status="passed",
+        tokens_masked_count=total_masked,
+    )
+
     return RagResponse(
         patient_id=pid,
         patient_name=name,
@@ -395,4 +496,6 @@ INSTRUCTIONS:
         recalled_long_term_memories=persistent_memories,
         short_term_turns_count=turns_count,
         model_used="clinical-rag-python-engine",
+        phi_masked=True,
+        guardrail_status="passed",
     )

@@ -25,6 +25,7 @@ The core design principle is:
 | **Agentic AI Orchestrator** | [LangGraph](https://langchain-ai.github.io/langgraph/) StateGraph with `MemorySaver` checkpointer & `interrupt_before` |
 | **AI Provider** | **OpenAI exclusively** — Extraction & RAG: `gpt-5.6-terra`, Structured Outputs via `max_completion_tokens`, TTS: `tts-1-hd` / `onyx` |
 | **Tool Protocol** | **Model Context Protocol (MCP)** Python SDK v2.x (`mcp`), FastMCP Server |
+| **Data Security & Privacy** | **HIPAA Safe Harbor (§ 164.514(b)) PHI Vault**, **GDPR (Art. 9 & 17)** Erasure, **OWASP LLM01** Scope Guardrails, Immutable Audit Logging (§ 164.312(b)) |
 | **Progressive Web App (PWA)** | Web App Manifest (`manifest.json`), Service Worker (`sw.js`), Apple Touch & Maskable Icons, Offline Shell |
 | **Speech Engine** | **Universal TTS Engine** — OpenAI `tts-1-hd` with automatic seamless Web Speech API (`window.speechSynthesis`) fallback |
 | **Cloud & Hosting** | **Firebase App Hosting** (`quantiq221` / `mriiq` / `us-east4`), Google Cloud, custom domain `mriiq.fit` |
@@ -104,15 +105,18 @@ Located in [`backend/app/graph/workflow.py`](backend/app/graph/workflow.py) and 
 
 ## 🤖 The Suite of Agentic AI Agents in Python
 
-All AI agents are implemented in Python in [`backend/app/agents/`](backend/app/agents/):
+All AI agents and security modules are implemented in Python in [`backend/app/agents/`](backend/app/agents/):
 
 ```text
 backend/app/agents/
-├── reader.py     # Clinical Reader Agent (gpt-5.6-terra fact extraction)
-├── decision.py   # Deterministic Decision Agent (evidence-based criteria engine)
-├── rag.py        # Clinical RAG Agent (SOAP EHR Q&A with section citations)
-├── vision.py     # Multimodal Vision Agent (chart scan & document analysis)
-└── tts.py        # Voice Briefing Agent (OpenAI tts-1-hd, onyx)
+├── reader.py          # Clinical Reader Agent (gpt-5.6-terra fact extraction)
+├── decision.py        # Deterministic Decision Agent (evidence-based criteria engine)
+├── rag.py             # Clinical RAG Agent (SOAP EHR Q&A with section citations)
+├── phi_vault.py       # HIPAA Safe Harbor §164.514(b) PHI/PII Masking & Tokenization Vault
+├── guardrail.py       # Strict 3-Patient Scope Lock & Anti-Jailbreak Guardrail
+├── audit_logger.py    # HIPAA §164.312(b) & GDPR Art. 30 Immutable Audit Logger
+├── vision.py          # Multimodal Vision Agent (chart scan & document analysis)
+└── tts.py             # Voice Briefing Agent (OpenAI tts-1-hd, onyx)
 ```
 
 ### 1. Clinical Reader Agent ([reader.py](backend/app/agents/reader.py))
@@ -279,12 +283,83 @@ Navigate to [http://localhost:3000](http://localhost:3000) or [http://mriiq.fit:
 
 ---
 
-## 🔒 Security & Compliance Safeguards
+## 🔒 Security, Guardrails & Compliance Architecture
 
-1. **Zero PHI**: Strictly operates on synthetic, non-identifiable benchmark data.
-2. **Server-Side API Key Protection**: `OPENAI_API_KEY` is exclusively handled in server-side runtimes and never packaged in client bundles.
-3. **Deterministic Authority**: AI extractions are strictly evaluated against rigid medical criteria; no generative model can issue an unvalidated authorization approval.
-4. **Human Oversight (HITL)**: Prior authorization decisions require human clinical reviewer approval with full immutable audit logging.
+MRIIQ implements an enterprise healthcare security posture combining **HIPAA Safe Harbor de-identification**, **GDPR Special Category Data protection & Right to Erasure**, and **strict 3-patient tenancy guardrails**.
+
+```mermaid
+flowchart LR
+    A["Clinician Inquiry"] --> B["1. Security Guardrail\n(3-Patient Scope Lock & Anti-Injection)"]
+    B -->|Blocked: Jailbreak / Unknown Patient| C["Deterministic Guardrail Block\n(Logged in audit_log.jsonl)"]
+    B -->|Passed: P001, P002, or P003| D["2. PHI/PII Masking Vault\n(Safe Harbor §164.514(b) Tokenization)"]
+    D --> E["3. OpenAI LLM Reasoning\n(Zero PHI / De-Identified Tokens)"]
+    E --> F["4. Detokenization Vault\n(Egress Context Restoration)"]
+    F --> G["5. HIPAA §164.312(b) Audit Log"]
+    G --> H["Audited Response to UI"]
+```
+
+### 1. PHI/PII Masking Vault (HIPAA Safe Harbor § 164.514(b) & GDPR Art. 25)
+* **Bidirectional Tokenization Engine**: Implemented in [`src/lib/phiVault.ts`](src/lib/phiVault.ts) and [`backend/app/agents/phi_vault.py`](backend/app/agents/phi_vault.py).
+* **Identifier Elimination**: Scans all clinical contexts and clinician inquiries for the 18 HIPAA Safe Harbor identifiers:
+  * Patient Names (`Alex Morgan` $\rightarrow$ `[PATIENT_NAME_001]`)
+  * Dates & DOBs (`04/12/1982` $\rightarrow$ `[DOB_001]`, `September 24, 2026` $\rightarrow$ `[DOS_TOKEN]`)
+  * Healthcare Providers & NPIs (`Dr. Sarah Vance, MD` $\rightarrow$ `[PROVIDER_001]`, `1982736451` $\rightarrow$ `[NPI_001]`)
+  * Facilities (`Metro Spine Institute` $\rightarrow$ `[CLINIC_001]`, `Oakridge Ambulatory` $\rightarrow$ `[CLINIC_002]`)
+  * Policy Numbers (`HBC-9928192` $\rightarrow$ `[POLICY_NUM_001]`), SSNs, emails, MRNs, and phone numbers.
+* **Zero PHI Exposure**: External LLMs (OpenAI `gpt-5.6-terra`) receive strictly de-identified tokens.
+* **Safe Egress Detokenization**: Restores legitimate patient context only for the authorized clinician session.
+
+### 2. Strict 3-Patient Scope & Tenancy Guardrail (OWASP LLM01 / NIST AI RMF)
+* **Guardrail Engine**: Implemented in [`src/lib/guardrail.ts`](src/lib/guardrail.ts) and [`backend/app/agents/guardrail.py`](backend/app/agents/guardrail.py).
+* **3-Patient Allowlist Lock**: Inquiries are strictly bound to authorized synthetic records:
+  * `P001` (Alex Morgan)
+  * `P002` (Jordan Lee)
+  * `P003` (Casey Kim)
+* **Anti-Jailbreak / Prompt Injection Defense**: Rejects adversarial prompts (`"ignore previous instructions"`, `"reveal system prompt"`, DAN mode, script injection) at the API perimeter.
+* **Unauthorized Patient Probing Defense**: Automatically detects and blocks attempts to probe extraneous or unauthorized patient identifiers (`"John Doe"`, `"Patient 4"`, `"CEO"`).
+* **Domain Boundary Enforcement**: Prevents off-topic misuse (cryptocurrency, coding, general trivia) and ensures the assistant remains scoped to Lumbar Spine MRI Prior Authorization.
+
+### 3. HIPAA & GDPR Compliance Matrix
+
+| Regulatory Requirement | Mandate | MRIIQ Technical Implementation |
+|---|---|---|
+| **HIPAA Privacy Rule** | 45 CFR § 164.514(b) | Safe Harbor bidirectional PHI/PII masking vault before external LLM transmission |
+| **HIPAA Security Rule** | 45 CFR § 164.312(a)(1) | Access control & 3-patient tenancy allowlist guardrail |
+| **HIPAA Audit Controls** | 45 CFR § 164.312(b) | Immutable structured logging in [`data/audit_log.jsonl`](data/audit_log.jsonl) |
+| **GDPR Special Category Data** | Article 9 | Enhanced protection and minimization for clinical health data |
+| **GDPR Privacy by Design** | Article 25 | Client & server tokenization vaults and ephemeral session scoping |
+| **GDPR Right to Erasure** | Article 17 | `DELETE /api/rag/memories` endpoint and one-click UI "Erase Memory" control |
+| **GDPR Records of Processing** | Article 30 | Standardized compliance tags on every audit record |
+
+### 4. Interactive UI Compliance Controls
+* **Security & Compliance Ribbon**: Integrated in [`FloatingRAGAssistant.tsx`](src/components/FloatingRAGAssistant.tsx) displaying real-time badges:
+  * `🛡️ HIPAA §164.514 Safe Harbor` • `GDPR Art. 9 & 17`
+  * `🔒 PHI Vault Active`
+  * `🎯 3-Patient Scope Lock`
+* **GDPR Memory Erasure Action**: Clinicians can wipe persistent clinical memories per patient with a single click, providing live toast confirmations and in-thread compliance audit notices.
+* **Guardrail Interventions**: Inquiries blocked by safety or scope rules render distinct amber/rose intervention banners detailing the exact policy citation.
+
+### 5. Automated Security Test Suite
+Run the automated verification suite to validate tokenization, guardrail interception, and audit logging:
+```bash
+python backend/scripts/test_security_compliance.py
+```
+```text
+--- Testing Guardrail ---
+Valid query: (True, None, None, None) -> PASSED
+Jailbreak query: (False, 'Security Guardrail Violation...', 'INJECTION') -> BLOCKED
+Unauthorized patient probe: (False, 'Scope Guardrail Violation...', 'SCOPE') -> BLOCKED
+Invalid patient ID ('P004'): (False, 'Scope Guardrail Violation...', 'SCOPE') -> BLOCKED
+Out of domain query: (False, 'Domain Guardrail Interception...', 'DOMAIN') -> BLOCKED
+
+--- Testing PHI Masking Vault ---
+Masked: Patient [PATIENT_NAME_001] seen by [PROVIDER_001] at [CLINIC_001] on [DOS_TOKEN].
+Tokens Replaced: 6 | Detokenization: Exact Match 100%
+
+--- Testing End-to-End RAG with Guardrail & Masking ---
+[AUDIT_LOG][RAG_QUERY] {"event_type": "RAG_QUERY", "patient_id": "P001", "guardrail_status": "passed"}
+Guardrail Status: passed | PHI Masked: True | Compliance: Active
+```
 
 ---
 
