@@ -8,7 +8,6 @@ import HumanReview from "@/components/HumanReview";
 import MockPdfViewer from "@/components/MockPdfViewer";
 import TTSPlayer from "@/components/TTSPlayer";
 import FinalOutcome from "@/components/FinalOutcome";
-import SOAPRagChat from "@/components/SOAPRagChat";
 import FloatingRAGAssistant from "@/components/FloatingRAGAssistant";
 import ThemeToggle from "@/components/ThemeToggle";
 import { authorize, submitReview, type AuthResponse } from "@/lib/api";
@@ -400,20 +399,6 @@ export default function Home() {
           </div>
         )}
 
-        {/* ── Interactive SOAP Clinical Documentation & RAG Q&A Assistant ────────────────────────────── */}
-        {patientId.trim().length >= 3 && (
-          <div className="animate-in">
-            <SOAPRagChat
-              selectedPatientId={patientId.trim().toUpperCase()}
-              onSelectPatient={handlePatientIdChange}
-              onClear={() => {
-                setPatientId("");
-                setClinicalNote("");
-              }}
-            />
-          </div>
-        )}
-
         {/* ── Synthetic Data Disclaimer ───────────────────────────────── */}
         <div className="synthetic-notice">
           SYNTHETIC CLINICAL DEMONSTRATION DATA — NOT A REAL PATIENT — FOR PRIOR AUTH EVALUATION TESTING ONLY
@@ -446,14 +431,9 @@ export default function Home() {
         </footer>
       </main>
 
-      {/* ── Docked Bottom-Right Clinical RAG Assistant with Dual Memory ── */}
+      {/* ── Dedicated Docked Clinical RAG Assistant (Isolated & Self-Contained) ── */}
       <FloatingRAGAssistant
         selectedPatientId={patientId.trim().toUpperCase()}
-        onSelectPatient={handlePatientIdChange}
-        onClear={() => {
-          setPatientId("");
-          setClinicalNote("");
-        }}
       />
     </>
   );

@@ -391,13 +391,12 @@ export default function FloatingRAGAssistant({
     setPosition(calculateDefaultPosition());
   };
 
-  /* ── Clear Chat History ────────────────────────────────────────────── */
+  /* ── Clear Chat History (Isolated to RAG) ─────────────────────────── */
   const handleClearInfo = () => {
     stopSpeech();
     setMessages([]);
     setQuestion("");
     setIsPlayingId(null);
-    onClear?.();
   };
 
   /* ── GDPR Article 17 Right to Erasure ──────────────────────────────── */
@@ -457,7 +456,6 @@ export default function FloatingRAGAssistant({
     if (detectedId) {
       targetPatientId = detectedId;
       setActivePatientId(detectedId);
-      onSelectPatient?.(detectedId);
     }
 
     const userMsg: ChatMessage = {
@@ -551,7 +549,6 @@ export default function FloatingRAGAssistant({
 
   const handleSelectPatientFromAssistant = (patientId: string, pendingQ?: string) => {
     setActivePatientId(patientId);
-    onSelectPatient?.(patientId);
 
     const ptName = SOAP_PATIENTS[patientId]?.name || patientId;
 
