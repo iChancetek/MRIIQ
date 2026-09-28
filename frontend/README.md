@@ -236,21 +236,51 @@ Firebase App Hosting monitors the GitHub repository [`iChancetek/MRIIQ`](https:/
 
 ## 🚀 Quick Start Guide
 
+MRIIQ operates as a dual-service full-stack architecture locally:
+- **FastAPI Backend (Python)** running on `http://localhost:8000`: Executes LangGraph agent workflows, MCP server tools, OpenAI `gpt-5.6-terra` clinical extraction, OpenAI Whisper STT (`/api/stt`), OpenAI TTS (`/api/tts`), and SOAP clinical RAG with dual-memory (`/api/rag`).
+- **Next.js Frontend (React/TypeScript)** running on `http://localhost:3000`: Provides the clinical portal UI. Through rewrites in [`next.config.ts`](next.config.ts), Next.js automatically proxies all `/api/*`, `/health`, and `/mock-pdfs/*` requests to `http://localhost:8000`.
+
+> 💡 **Both backend and frontend must be running simultaneously** in separate terminals so that the `http://localhost:3000` frontend can communicate with the backend services.
+
+---
+
 ### Step 1: Clone & Configure Environment
+
 ```bash
 git clone https://github.com/iChancetek/MRIIQ.git
 cd MRIIQ
+```
 
-# Configure .env:
-OPENAI_API_KEY="your-openai-api-key"
+Create a `.env` (for backend) and `.env.local` (for frontend) file in the project root:
+
+```bash
+# ==============================================================================
+# Backend Configuration (.env)
+# ==============================================================================
+OPENAI_API_KEY=your-openai-api-key-here
 OPENAI_MODEL=gpt-5.6-terra
 OPENAI_TTS_MODEL=tts-1-hd
 OPENAI_TTS_VOICE=onyx
+
+# ==============================================================================
+# Frontend & Proxy Configuration (.env.local)
+# ==============================================================================
+NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_URL=http://localhost:8000
+OPENAI_API_KEY=your-openai-api-key-here
 ```
 
+---
+
 ### Step 2: Run Python Automated Tests
+
+Verify that your Python environment, LangGraph agents, decision rules, and RAG clinical queries pass automated tests:
+
 ```bash
+# Install Python dependencies
 python -m pip install -r backend/requirements.txt
+
+# Run the test suite
 python test.py
 ```
 
@@ -270,18 +300,74 @@ RAG [P003] 'What is the health insurance coverage status?' -> [Assessment]: PASS
 All tests PASSED.
 ```
 
-### Step 3: Launch Local Servers
-```bash
-# Terminal 1: FastAPI Backend
-uvicorn backend.app.main:app --reload --port 8000
+---
 
-# Terminal 2: Next.js Frontend
-cd frontend
+### Step 3: Launch Local Servers (Two Terminals Required)
+
+#### 🖥️ Terminal 1 — Python FastAPI Backend
+
+> ⚠️ **CRITICAL:** Terminal 1 **must** be executed from the **project root directory** (`MRIIQ`), not from within `backend/`. The Python module import path `backend.app.main:app` requires the project root on `PYTHONPATH`.
+
+```powershell
+# In Terminal 1 (from project root):
+cd d:\chancellor\MRIIQ
+
+# Install Python requirements if not already completed:
+python -m pip install -r backend/requirements.txt
+
+# Start the FastAPI backend server on port 8000:
+python -m uvicorn backend.app.main:app --reload --port 8000
+```
+
+- **Backend URL:** `http://localhost:8000`
+- **Interactive OpenAPI Docs:** `http://localhost:8000/docs`
+- **Health Check Endpoint:** `http://localhost:8000/health` (returns `{"status":"ok","service":"mri-prior-auth"}`)
+
+---
+
+#### 🌐 Terminal 2 — Next.js Frontend
+
+```powershell
+# In Terminal 2 (from project root):
+cd d:\chancellor\MRIIQ
+
+# Install Node.js dependencies if not already completed:
 npm install
+
+# Start the Next.js development server on port 3000:
 npm run dev
 ```
 
-Navigate to [http://localhost:3000](http://localhost:3000) or [http://mriiq.fit:3000](http://mriiq.fit:3000).
+- **Frontend URL:** [http://localhost:3000](http://localhost:3000) (or `http://mriiq.fit:3000` if local hosts mapping is configured)
+- **Local Dev Server:** Runs Next.js with hot reload enabled on port 3000.
+
+---
+
+### Step 4: Verify Full-Stack Functionality
+
+1. **Verify API Proxy**: Open [http://localhost:3000/health](http://localhost:3000/health) in your browser. It should proxy to the backend and return `{"status":"ok","service":"mri-prior-auth"}`.
+2. **Access Clinical Portal**: Navigate to [http://localhost:3000](http://localhost:3000).
+3. **Run Prior Auth Evaluation**:
+   - Select patient **P001** (Alex Morgan), **P002** (Jordan Lee), or **P003** (Casey Kim).
+   - Click **Run Prior Auth Evaluation** to trigger the LangGraph orchestration (`/api/authorize`).
+   - Review extracted facts and submit a Human-in-the-Loop decision (`/api/review`).
+4. **Test AI Assistant (Clinical RAG)**:
+   - Click the floating **AI Assistant** icon in the bottom right corner.
+   - Ask clinical questions regarding patient history, physical therapy, or insurance coverage (`/api/rag`).
+   - Use the **Mic** button to test OpenAI Whisper STT dictation (`/api/stt`).
+   - Click the **Listen** button to test OpenAI TTS playback (`/api/tts`).
+
+---
+
+### 🛠️ Common Local Troubleshooting
+
+| Symptom | Cause | Solution |
+|---|---|---|
+| `ModuleNotFoundError: No module named 'backend'` | Terminal 1 was started inside the `backend/` directory instead of the project root. | Run `cd ..` back to the repository root directory (`MRIIQ`) and run `python -m uvicorn backend.app.main:app --reload --port 8000`. |
+| `Failed to fetch` or 500 error when clicking "Run Prior Auth Evaluation" on `localhost:3000` | FastAPI backend is not running on port 8000. | Check Terminal 1 and ensure `uvicorn` is running without errors. Confirm `http://localhost:8000/health` responds. |
+| `RuntimeError: OPENAI_API_KEY is not set` | Missing API key in environment. | Ensure `.env` is created in the project root with `OPENAI_API_KEY=your_key`. |
+| `RuntimeError: OPENAI_MODEL is '...' but this project requires 'gpt-5.6-terra'` | Incorrect model name configured. | Ensure `OPENAI_MODEL=gpt-5.6-terra` in your `.env`. |
+| Port 8000 or 3000 already in use | Another process is occupying the port. | Terminate the existing process using PowerShell: `Get-Process -Id (Get-NetTCPConnection -LocalPort 8000).OwningProcess | Stop-Process` or specify an alternate port. |
 
 ---
 
